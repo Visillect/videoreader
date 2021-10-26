@@ -1,0 +1,2 @@
+# videoreader
+c++ ffmpeg wrapper
