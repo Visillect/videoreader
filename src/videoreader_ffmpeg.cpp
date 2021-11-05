@@ -211,9 +211,11 @@ struct VideoReaderFFmpeg::Impl {
       return;
     }
     if (thread_packet->stream_index == this->av_stream->index) {
+      this->read_queue_lock.lock();
       if (this->read_queue.size() > 100)
       {
         if (this->is_seekable()) {  // offline - wait for data
+          this->read_queue_lock.unlock();
           while (!this->stop_requested) {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
             {
@@ -222,11 +224,13 @@ struct VideoReaderFFmpeg::Impl {
                 break;
             }
           }
+          this->read_queue_lock.lock(); // lock here for easier unlock logic
         } else {  // realtime - clear buffer
           for (int i = 0; i < 90; ++i)
             this->read_queue.pop_front();
         }
       }
+      this->read_queue_lock.unlock();
       {
         std::lock_guard<SpinLock> guard(this->read_queue_lock);
         this->read_queue.push_back(thread_packet.release());
@@ -262,17 +266,17 @@ VideoReader::Frame::number_t VideoReaderFFmpeg::size() const
 }
 
 AVPacket* VideoReaderFFmpeg::Impl::pop_packet() {
-  AVPacket* ret;
   while (true) {
-    std::lock_guard<SpinLock> guard(this->read_queue_lock);
+    this->read_queue_lock.lock();
     if (this->read_queue.empty()) {
       this->read_queue_lock.unlock();
       std::this_thread::yield();
-      continue;
+    } else {
+      AVPacket* ret = this->read_queue.front();
+      this->read_queue.pop_front();
+      this->read_queue_lock.unlock();
+      return ret;
     }
-    ret = this->read_queue.front();
-    this->read_queue.pop_front();
-    return ret;
   }
 }
 
