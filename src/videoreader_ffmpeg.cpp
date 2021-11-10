@@ -59,6 +59,33 @@ struct SwsContextDeleter {
 };
 using SwsContextUP = std::unique_ptr<SwsContext, SwsContextDeleter>;
 
+struct AVFrameDeleter {
+  void operator() (AVFrame* av_frame) const noexcept {
+    av_frame_free(&av_frame);
+  }
+};
+using AVFrameUP = std::unique_ptr<AVFrame, AVFrameDeleter>;
+
+struct AVDictionaryDeleter {
+  void operator() (AVDictionary* av_dictionary) const noexcept {
+    av_dict_free(&av_dictionary);
+  }
+};
+using AVDictionaryUP = std::unique_ptr<AVDictionary, AVDictionaryDeleter>;
+
+static AVDictionaryUP _create_dict_from_params_vec(
+  std::vector<std::string> const& parameter_pairs)
+{
+  AVDictionary *options = nullptr;
+  for (std::vector<std::string>::const_iterator it = parameter_pairs.begin();
+    it != parameter_pairs.end(); ++it
+  ) {
+    std::string const& key = *it;
+    std::string const& value = *++it;
+    av_dict_set(&options, key.c_str(), value.c_str(), 0);
+  }
+  return AVDictionaryUP{options};
+}
 
 static std::string ret_to_string(int ernum)
 {
@@ -70,25 +97,19 @@ static std::string ret_to_string(int ernum)
 
 static AVFormatContextUP _get_format_context(
   std::string const& filename,
-  std::vector<std::string> const& parameter_pairs)
+  AVDictionaryUP &options)
 {
-  AVFormatContext *format_context = nullptr;
-  AVDictionary *opts = nullptr;
   AVInputFormat *input_format = nullptr;
   std::string path_to_use = filename;
   if (filename.substr(0, 8) == "dshow://") {
     input_format = av_find_input_format("dshow");
     path_to_use = filename.substr(8, filename.size());
   }
-  for (std::vector<std::string>::const_iterator it = parameter_pairs.begin();
-    it != parameter_pairs.end(); ++it
-  ) {
-    std::string const& key = *it;
-    std::string const& value = *++it;
-    av_dict_set(&opts, key.c_str(), value.c_str(), 0);
-  }
+  AVFormatContext *format_context = nullptr;
+  AVDictionary *opts = options.release();
   int const ret = avformat_open_input(
     &format_context, path_to_use.c_str(), input_format, &opts);
+  options.reset(opts);
   if (ret < 0)
     throw std::runtime_error("Can't open `" + filename + "`, " + ret_to_string(ret));
   if (!format_context)
@@ -109,7 +130,9 @@ static AVStream* _get_video_stream(AVFormatContext* format_context)
   throw std::runtime_error("video steam not found");
 }
 
-static AVCodecContextUP _get_codec_context(AVCodecParameters const* av_codecpar)
+static AVCodecContextUP _get_codec_context(
+  AVCodecParameters const* av_codecpar,
+  AVDictionaryUP &options)
 {
   AVCodec const* av_codec = avcodec_find_decoder(av_codecpar->codec_id);
   if (!av_codec)
@@ -119,8 +142,10 @@ static AVCodecContextUP _get_codec_context(AVCodecParameters const* av_codecpar)
   if (avcodec_parameters_to_context(codec_context.get(), av_codecpar) != 0)
     throw std::runtime_error("avcodec_parameters_to_context failed");
 
-  if (avcodec_open2(codec_context.get(), av_codec, NULL) != 0)
+  AVDictionary *opts = options.release();
+  if (avcodec_open2(codec_context.get(), av_codec, &opts) != 0)
     throw std::runtime_error("avcodec_open2 failed");
+  options.reset(opts);
 
   return codec_context;
 }
@@ -148,10 +173,10 @@ static SwsContextUP _create_converter(
     new_pix_format = pix_format;
   }
 
-  SwsContextUP converter = SwsContextUP(sws_getContext(
+  SwsContextUP converter{sws_getContext(
     width, height, new_pix_format,
     width, height, AV_PIX_FMT_RGB24,
-    SWS_BICUBIC, nullptr, nullptr, nullptr));
+    SWS_BICUBIC, nullptr, nullptr, nullptr)};
   if (!converter)
     throw std::runtime_error("Converter initialization failed");
   return converter;
@@ -159,14 +184,14 @@ static SwsContextUP _create_converter(
 
 struct VideoReaderFFmpeg::Impl {
   decltype(VideoReader::Frame::number) current_frame = 0;
+  std::atomic<bool> stop_requested;
   AVFormatContextUP format_context;
   AVStream* av_stream;
   AVCodecContextUP codec_context;
-  std::unique_ptr<AVFrame, void(*)(AVFrame*)> av_frame;
+  AVFrameUP av_frame;
   SwsContextUP sws_context;
 
   std::thread read_thread;  // for network to work
-  std::atomic<bool> stop_requested;
   std::deque<AVPacket*> read_queue; // read buffer
   SpinLock read_queue_lock;
   AVPacket* pop_packet();
@@ -175,18 +200,29 @@ struct VideoReaderFFmpeg::Impl {
     std::string const& url,
     std::vector<std::string> const& parameter_pairs
   ) :
-    format_context(std::move(_get_format_context(url, parameter_pairs))),
-    av_stream(_get_video_stream(format_context.get())),
-    codec_context(std::move(_get_codec_context(av_stream->codecpar))),
-    av_frame(av_frame_alloc(), [](AVFrame* c) {av_frame_free(&c); }),
     stop_requested(false)
   {
+    AVDictionaryUP options = _create_dict_from_params_vec(parameter_pairs);
+    this->format_context = _get_format_context(url, options);
+    this->av_stream = _get_video_stream(format_context.get());
+    this->codec_context = _get_codec_context(av_stream->codecpar, options);
+    this->av_frame = AVFrameUP(av_frame_alloc());
     if (this->codec_context->pix_fmt != AV_PIX_FMT_NONE) {
       this->sws_context = _create_converter(
         this->codec_context->pix_fmt,
         this->codec_context->width,
         this->codec_context->height);
     }
+
+    if (options) {
+      char *buf = NULL;
+      if (av_dict_get_string(options.get(), &buf, '=', ',') < 0)
+        throw std::runtime_error("error formatting parameters dictionary");
+      std::string options{buf};
+      av_freep(&buf);
+      throw std::runtime_error("unknown options: " + options);
+    }
+
     this->read_thread = std::thread(&VideoReaderFFmpeg::Impl::read, this);
   }
   bool is_seekable() const {
