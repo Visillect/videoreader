@@ -111,7 +111,7 @@ bool VideoReaderPylon::is_seekable() const {
   return false;
 }
 
-VideoReader::FrameUP VideoReaderPylon::next_frame() {
+VideoReader::FrameUP VideoReaderPylon::next_frame(bool decode) {
   Pylon::CGrabResultPtr result = this->impl->pop_grab_result();
   if (!result.IsValid())
     return VideoReader::FrameUP();
@@ -119,7 +119,9 @@ VideoReader::FrameUP VideoReaderPylon::next_frame() {
   MinImg &img = ret->image;
   NewMinImagePrototype(&img, result->GetWidth(), result->GetHeight(), 3, TYP_UINT8, 0, AO_EMPTY);
   AllocMinImage(&img, 1);
-  this->impl->converter.Convert(img.p_zero_line, img.stride * img.height, result);
+  if (decode) {
+    this->impl->converter.Convert(img.p_zero_line, img.stride * img.height, result);
+  }
   ret->number = result->GetBlockID();
   ret->timestamp_s = result->GetTimeStamp() / 1000.0;
   return ret;

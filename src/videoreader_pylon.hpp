@@ -10,7 +10,7 @@ public:
   );
 
   bool is_seekable() const override;
-  VideoReader::FrameUP next_frame() override;
+  VideoReader::FrameUP next_frame(bool decode) override;
   VideoReader::Frame::number_t size() const override;
 
 private:

@@ -41,6 +41,8 @@ public:
   // offline video should be seekable, realtime not (see AVIOContext::seekable)
   virtual bool is_seekable() const = 0;
 
-  // frame data is read in a separate thread, next_frame only decodes it
-  virtual FrameUP next_frame() = 0;
+  // decode: decode the frame (false is useful for skipping frames,
+  //         the result will be a valid frame with uinitialized pixel values)
+  // frame data are read in a separate thread
+  virtual FrameUP next_frame(bool decode=true) = 0;
 };

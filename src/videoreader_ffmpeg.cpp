@@ -322,7 +322,7 @@ VideoReaderFFmpeg::~VideoReaderFFmpeg() {
 }
 
 
-VideoReader::FrameUP VideoReaderFFmpeg::next_frame()
+VideoReader::FrameUP VideoReaderFFmpeg::next_frame(bool decode)
 {
   while (true)
   {
@@ -353,15 +353,17 @@ VideoReader::FrameUP VideoReaderFFmpeg::next_frame()
           this->impl->codec_context->width,
           this->impl->codec_context->height);
       }
-      sws_scale(
-        this->impl->sws_context.get(),
-        this->impl->av_frame->data,
-        this->impl->av_frame->linesize,
-        0,
-        this->impl->av_frame->height,
-        &ret->image.p_zero_line,
-        &ret->image.stride
-      );
+      if (decode) {
+        sws_scale(
+          this->impl->sws_context.get(),
+          this->impl->av_frame->data,
+          this->impl->av_frame->linesize,
+          0,
+          this->impl->av_frame->height,
+          &ret->image.p_zero_line,
+          &ret->image.stride
+        );
+      }
       ret->number = this->impl->current_frame++;
       if (this->impl->av_frame->pkt_dts != AV_NOPTS_VALUE)
       {

@@ -35,21 +35,29 @@ TEST(TestVedeoreader, TestVideoFile) {
   EXPECT_EQ(read_frame_count, 145UL);
 }
 
-void test_create_invalid_path() {
-  VideoReader::create("invalid_path.mp4");
-}
+#define EXPECT_THROW_WITH_MESSAGE(stmt, etype, whatstring) EXPECT_THROW( \
+    try { \
+        stmt; \
+    } catch (const etype& ex) { \
+        EXPECT_EQ(std::string(ex.what()), whatstring); \
+        throw; \
+    } \
+, etype)
 
 TEST(TestVedeoreader, InvalidPath) {
-  ASSERT_THROW(test_create_invalid_path(), std::runtime_error);
-}
-
-void test_create_argument() {
-  VideoReader::create(TEST_VIDEOPATH, {"single"});
+  EXPECT_THROW_WITH_MESSAGE(
+    VideoReader::create("invalid_path.mp4"),
+    std::runtime_error, "Can't open `invalid_path.mp4`, No such file or directory");
 }
 
 TEST(TestVedeoreader, Arguments) {
-  ASSERT_THROW(test_create_argument(), std::runtime_error);
-  VideoReader::create(TEST_VIDEOPATH, {"single", "1"});
+  EXPECT_THROW_WITH_MESSAGE(
+    (VideoReader::create(TEST_VIDEOPATH, {"single"})),
+    std::runtime_error, "invalid videoreader parameters size");
+  EXPECT_THROW_WITH_MESSAGE(
+    (VideoReader::create(TEST_VIDEOPATH, {"single", "1"})),
+    std::runtime_error, "unknown options: single=1");
+  VideoReader::create(TEST_VIDEOPATH, {"threads", "2"});
 }
 
 int main(int argc, char **argv) {
