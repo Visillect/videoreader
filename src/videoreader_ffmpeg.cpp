@@ -14,6 +14,7 @@ extern "C" {
 #include <libavformat/avformat.h>
 #include <libavutil/avutil.h>
 #include <libswscale/swscale.h>
+#include <libavformat/avio.h> // needed?
 }
 #include <atomic>
 #include <deque>
@@ -100,28 +101,51 @@ static std::string ret_to_string(int ernum) {
   return "unknown error (ret=" + std::to_string(ernum) + ")";
 }
 
-static AVFormatContextUP
-_get_format_context(std::string const& filename, AVDictionaryUP& options) {
-  AVInputFormat* input_format = nullptr;
+static AVFormatContextUP _get_format_context(
+  std::string const& filename,
+  AVDictionaryUP &options,
+  void* opaque)
+{
+  AVInputFormat const *input_format = nullptr;
   std::string path_to_use = filename;
   if (filename.substr(0, 8) == "dshow://") {
     input_format = av_find_input_format("dshow");
     path_to_use = filename.substr(8, filename.size());
   }
-  AVFormatContext* format_context = nullptr;
-  AVDictionary* opts = options.release();
+  AVFormatContext *format_context = avformat_alloc_context();
+  if (!format_context)
+    throw std::runtime_error("Failed to allocate AVFormatContext");
+  format_context->opaque = opaque;
+
+  AVDictionary *opts = options.release();
   int const ret = avformat_open_input(
       &format_context, path_to_use.c_str(), input_format, &opts);
   options.reset(opts);
-  if (ret < 0)
+  if (ret < 0) {
     throw std::runtime_error(
-        "Can't open `" + filename + "`, " + ret_to_string(ret));
-  if (!format_context)
-    throw std::runtime_error("invalid AVFormatContext");
+      "Can't open `" + filename + "`, " + ret_to_string(ret));
+  }
   return AVFormatContextUP(format_context);
 }
 
-static AVStream* _get_video_stream(AVFormatContext* format_context) {
+/*
+This is a copy from libavformat/internal.h. Helps with logging big time.
+*/
+struct DirdyHackFFStream {
+    AVStream pub;
+    int reorder;
+    struct AVBSFContext *bsfc;
+    int bitstream_checked;
+    AVCodecContext *avctx;
+};
+
+static AVStream* _get_video_stream(AVFormatContext* format_context)
+{
+  for (unsigned i = 0; i < format_context->nb_streams; i++) {
+    DirdyHackFFStream *const st = reinterpret_cast<DirdyHackFFStream*>(
+      format_context->streams[i]);
+    st->avctx->opaque = format_context->opaque;
+  }
   if (avformat_find_stream_info(format_context, NULL) != 0)
     throw std::runtime_error("avformat_find_stream_info failed");
   for (size_t stream_idx = 0; stream_idx < format_context->nb_streams;
@@ -134,11 +158,15 @@ static AVStream* _get_video_stream(AVFormatContext* format_context) {
 }
 
 static AVCodecContextUP _get_codec_context(
-    AVCodecParameters const* av_codecpar, AVDictionaryUP& options) {
+  AVCodecParameters const* av_codecpar,
+  AVDictionaryUP &options,
+  void* opaque)
+{
   AVCodec const* av_codec = avcodec_find_decoder(av_codecpar->codec_id);
   if (!av_codec)
     throw std::runtime_error("Unsupported codec");
   auto codec_context = AVCodecContextUP(avcodec_alloc_context3(av_codec));
+  codec_context->opaque = opaque;
 
   if (avcodec_parameters_to_context(codec_context.get(), av_codecpar) != 0)
     throw std::runtime_error("avcodec_parameters_to_context failed");
@@ -203,13 +231,25 @@ struct VideoReaderFFmpeg::Impl {
   SpinLock read_queue_lock;
   AVPacket* pop_packet();
 
+  VideoReader::LogCallback log_callback;
+  void* userdata;
+  int print_prefix;
+
   Impl(
-      std::string const& url, std::vector<std::string> const& parameter_pairs) :
-      stop_requested(false) {
+    std::string const& url,
+    std::vector<std::string> const& parameter_pairs,
+    VideoReader::LogCallback log_callback,
+    void* userdata
+  ) :
+    stop_requested(false),
+    log_callback{log_callback},
+    userdata{userdata},
+    print_prefix{1}
+  {
     AVDictionaryUP options = _create_dict_from_params_vec(parameter_pairs);
-    this->format_context = _get_format_context(url, options);
+    this->format_context = _get_format_context(url, options, this);
     this->av_stream = _get_video_stream(format_context.get());
-    this->codec_context = _get_codec_context(av_stream->codecpar, options);
+    this->codec_context = _get_codec_context(av_stream->codecpar, options, this);
     this->av_frame = AVFrameUP(av_frame_alloc());
     if (this->codec_context->pix_fmt != AV_PIX_FMT_NONE) {
       this->sws_context = _create_converter(
@@ -280,15 +320,86 @@ struct VideoReaderFFmpeg::Impl {
   }
 };
 
+static void videoreader_ffmpeg_callback(void* avcl, int level, const char* fmt, va_list vl) {
+  if (!avcl) {
+    return;  // can't access userdata (opaque)
+  }
+  if (level > av_log_get_level()) {
+    return;
+  }
+  AVClass* avc = *(AVClass **) avcl;
+  // possible class names:
+  // * AVFormatContext
+  // * AVCodecContext
+  // * AVIOContext
+  // * SWResampler
+  // * SWScaler
+  // * URLContext
+
+  void *opaque = nullptr;
+  switch(avc->class_name[2])
+  {
+    case 'F': // AVFormatContext
+      opaque = static_cast<AVFormatContext*>(avcl)->opaque;
+      break;
+    case 'C': // AVCodecContext
+      opaque = static_cast<AVCodecContext*>(avcl)->opaque;
+      break;
+    case 'I': // AVIOContext
+      opaque = static_cast<AVIOContext*>(avcl)->opaque;
+      break;
+    // case 'R': // SWResampler
+    //   opaque = static_cast<SWResampler*>(avcl)->opaque;
+    //   break;
+    // case 'S': // SWScaler
+    //   opaque = static_cast<SWScaler*>(avcl)->opaque;
+    //   break;
+    case 'L': // URLContext
+      // Opaque struct. Ignore.
+      break;
+  }
+  if (opaque == nullptr) {
+    return;
+  }
+  auto const impl = reinterpret_cast<VideoReaderFFmpeg::Impl*>(opaque);
+  VideoReader::LogLevel const vr_level = [level]{
+    if (level <= AV_LOG_FATAL) {
+      return VideoReader::LogLevel::FATAL;
+    }
+    if (level <= AV_LOG_ERROR) {
+      return VideoReader::LogLevel::ERROR;
+    }
+    if (level <= AV_LOG_WARNING) {
+      return VideoReader::LogLevel::WARNING;
+    }
+    if (level <= AV_LOG_INFO) {
+      return VideoReader::LogLevel::INFO;
+    }
+    return VideoReader::LogLevel::DEBUG;
+  }();
+  char message[2048];
+  av_log_format_line(avcl, level, fmt, vl, message, sizeof(message), &impl->print_prefix);
+  impl->log_callback(message, vr_level, impl->userdata);
+}
+
 VideoReaderFFmpeg::VideoReaderFFmpeg(
-    std::string const& url, std::vector<std::string> const& parameter_pairs) {
+  std::string const& url,
+  std::vector<std::string> const& parameter_pairs,
+  VideoReader::LogCallback log_callback,
+  void* userdata)
+{
   avformat_network_init();
   avdevice_register_all();
-#if LIBAVFORMAT_VERSION_INT < AV_VERSION_INT(58, 9, 100)
+  av_log_set_level(AV_LOG_INFO);
+  if (log_callback != NULL) {
+    av_log_set_callback(videoreader_ffmpeg_callback);
+  }
+#if LIBAVFORMAT_VERSION_INT < AV_VERSION_INT(58,9,100)
   av_register_all();
 #endif
   this->impl = std::unique_ptr<VideoReaderFFmpeg::Impl>(
-      new VideoReaderFFmpeg::Impl(url, parameter_pairs));
+    new VideoReaderFFmpeg::Impl(url, parameter_pairs, log_callback, userdata)
+  );
 }
 
 bool VideoReaderFFmpeg::is_seekable() const {

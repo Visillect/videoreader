@@ -17,7 +17,16 @@ public:
     ~Frame();  // Frees MinImg
   };
 
+  enum class LogLevel : int {  // int so the interface can be used from `C`
+    FATAL,
+    ERROR,
+    WARNING,
+    INFO,
+    DEBUG
+  };
+
   using FrameUP = std::unique_ptr<Frame>;
+  using LogCallback = void (*)(char * message, LogLevel log_level, void* userdata);
 
   // url: file path or any ffmpeg url
   // parameter_pairs: protocol parameters, for example:
@@ -29,7 +38,9 @@ public:
   // see https://ffmpeg.org/ffmpeg-protocols.html for more details
   static std::unique_ptr<VideoReader> create(
     std::string const& url,
-    std::vector<std::string> const& parameter_pairs = {} // size % 2 == 0
+    std::vector<std::string> const& parameter_pairs = {}, // size % 2 == 0
+    LogCallback log_callback = nullptr,
+    void* userdata = nullptr
   );
   virtual ~VideoReader();
 

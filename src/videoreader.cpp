@@ -12,7 +12,9 @@
 
 std::unique_ptr<VideoReader> VideoReader::create(
   std::string const& url,
-  std::vector<std::string> const& parameter_pairs
+  std::vector<std::string> const& parameter_pairs,
+  LogCallback log_callback,
+  void* userdata
 )
 {
   if (parameter_pairs.size() % 2 != 0)
@@ -26,7 +28,7 @@ std::unique_ptr<VideoReader> VideoReader::create(
 #endif
 #ifdef VIDEOREADER_WITH_FFMPEG
   return std::unique_ptr<VideoReader>(
-    new VideoReaderFFmpeg(url, parameter_pairs));
+    new VideoReaderFFmpeg(url, parameter_pairs, log_callback, userdata));
 #endif
 #if !defined(VIDEOREADER_WITH_FFMPEG) && !defined(VIDEOREADER_WITH_PYLON)
   throw std::runtime_error("build without any video backed")
