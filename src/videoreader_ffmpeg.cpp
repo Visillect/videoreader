@@ -118,8 +118,13 @@ static AVFormatContextUP _get_format_context(
   format_context->opaque = opaque;
 
   AVDictionary *opts = options.release();
-  int const ret = avformat_open_input(
-      &format_context, path_to_use.c_str(), input_format, &opts);
+
+  int const ret = avformat_open_input(&format_context, path_to_use.c_str(),
+# ifdef FF_API_AVIOFORMAT  // silly cast for ffmpeg4
+  (AVInputFormat *)
+# endif
+  input_format, &opts);
+
   options.reset(opts);
   if (ret < 0) {
     throw std::runtime_error(
