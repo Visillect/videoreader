@@ -138,7 +138,6 @@ static AVFormatContextUP _get_format_context(
 This is a copy from libavformat/internal.h. Helps with logging big time.
 */
 struct DirdyHackFFStream {
-    AVStream pub;
     int reorder;
     struct AVBSFContext *bsfc;
     int bitstream_checked;
@@ -149,9 +148,12 @@ static AVStream* _get_video_stream(AVFormatContext* format_context)
 {
   for (unsigned stream_idx = 0; stream_idx < format_context->nb_streams;
        ++stream_idx) {
-    DirdyHackFFStream *const st = reinterpret_cast<DirdyHackFFStream*>(
-      format_context->streams[stream_idx]);
-    st->avctx->opaque = format_context->opaque;
+#   ifdef FF_API_AVIOFORMAT
+    reinterpret_cast<DirdyHackFFStream*>(format_context->streams[stream_idx]->internal)
+#   else
+    reinterpret_cast<DirdyHackFFStream*>(format_context->streams[stream_idx] + 1)
+#   endif
+    ->avctx->opaque = format_context->opaque;
   }
   if (avformat_find_stream_info(format_context, NULL) != 0) {
     throw std::runtime_error("avformat_find_stream_info failed");
