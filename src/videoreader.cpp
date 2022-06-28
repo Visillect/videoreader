@@ -17,8 +17,9 @@ std::unique_ptr<VideoReader> VideoReader::create(
   void* userdata
 )
 {
-  if (parameter_pairs.size() % 2 != 0)
+  if (parameter_pairs.size() % 2 != 0) {
     throw std::runtime_error("invalid videoreader parameters size");
+  }
 
 #ifdef VIDEOREADER_WITH_PYLON
   if (url == "pylon") {

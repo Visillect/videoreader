@@ -35,9 +35,9 @@ static void run(std::string const& url,
   uint64_t const frames_count = video_reader->size();
   std::cout << "frames_count: " << frames_count << std::endl
             << std::boolalpha << "is_seekaable: " << video_reader->is_seekable() << std::endl;
-  unsigned int const SZ{16};
-  std::vector<double> fps(SZ);
-  std::vector<std::chrono::high_resolution_clock::duration> durations(SZ);
+  unsigned int const FPS_SZ{16};
+  std::vector<double> fps(FPS_SZ);
+  std::vector<std::chrono::high_resolution_clock::duration> durations(FPS_SZ);
 
 #ifdef USE_MINVIEWER_CLIENT
   auto c = MinViewerClient(url);
@@ -54,14 +54,15 @@ static void run(std::string const& url,
   std::cout << std::fixed;
   while (auto frame = video_reader->next_frame())
   {
-    if (ctrl_c)
+    if (ctrl_c) {
       break;
+    }
     auto const cur_time = std::chrono::high_resolution_clock::now();
-    fps[counter % SZ] = frame->timestamp_s - prev_timestamp;
+    fps[counter % FPS_SZ] = frame->timestamp_s - prev_timestamp;
     missed_frames += (frame->number - 1) - prev_frame_number;
     prev_timestamp = frame->timestamp_s;
     prev_frame_number = frame->number;
-    durations[counter % SZ] = cur_time - prev_time;
+    durations[counter % FPS_SZ] = cur_time - prev_time;
 
 #ifdef USE_MINVIEWER_CLIENT
   c.add_image(frame->image, {{"obj_id", img_id}});
@@ -71,11 +72,11 @@ static void run(std::string const& url,
               << frame->image.height << "x"
               << frame->image.channels
               << " @ " << std::setw(10) << frame->timestamp_s << "s [missed " << missed_frames << "]";
-    if (counter >= SZ) {
+    if (counter >= FPS_SZ) {
       double const real_fps = fps.size() / std::accumulate(fps.begin(), fps.end(), 0.0);
       auto const total_duration = std::accumulate(durations.begin(), durations.end(), std::chrono::high_resolution_clock::duration{});
       std::chrono::duration<double> duration_s = total_duration;
-      double const read_fps = SZ / duration_s.count();
+      double const read_fps = FPS_SZ / duration_s.count();
       std::cout << " [real " << std::setw(7) << std::setprecision( 2 ) << real_fps << "fps / read "
                              << std::setw(7) << read_fps << "fps]";
     }

@@ -113,8 +113,9 @@ static AVFormatContextUP _get_format_context(
     path_to_use = filename.substr(8, filename.size());
   }
   AVFormatContext *format_context = avformat_alloc_context();
-  if (!format_context)
+  if (format_context == nullptr) {
     throw std::runtime_error("Failed to allocate AVFormatContext");
+  }
   format_context->opaque = opaque;
 
   AVDictionary *opts = options.release();
@@ -146,14 +147,16 @@ struct DirdyHackFFStream {
 
 static AVStream* _get_video_stream(AVFormatContext* format_context)
 {
-  for (unsigned i = 0; i < format_context->nb_streams; i++) {
+  for (unsigned stream_idx = 0; stream_idx < format_context->nb_streams;
+       ++stream_idx) {
     DirdyHackFFStream *const st = reinterpret_cast<DirdyHackFFStream*>(
-      format_context->streams[i]);
+      format_context->streams[stream_idx]);
     st->avctx->opaque = format_context->opaque;
   }
-  if (avformat_find_stream_info(format_context, NULL) != 0)
+  if (avformat_find_stream_info(format_context, NULL) != 0) {
     throw std::runtime_error("avformat_find_stream_info failed");
-  for (size_t stream_idx = 0; stream_idx < format_context->nb_streams;
+  }
+  for (unsigned stream_idx = 0; stream_idx < format_context->nb_streams;
        ++stream_idx) {
     AVStream* av_stream = format_context->streams[stream_idx];
     if (av_stream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO)
@@ -168,17 +171,20 @@ static AVCodecContextUP _get_codec_context(
   void* opaque)
 {
   AVCodec const* av_codec = avcodec_find_decoder(av_codecpar->codec_id);
-  if (!av_codec)
+  if (!av_codec) {
     throw std::runtime_error("Unsupported codec");
+  }
   auto codec_context = AVCodecContextUP(avcodec_alloc_context3(av_codec));
   codec_context->opaque = opaque;
 
-  if (avcodec_parameters_to_context(codec_context.get(), av_codecpar) != 0)
+  if (avcodec_parameters_to_context(codec_context.get(), av_codecpar) != 0) {
     throw std::runtime_error("avcodec_parameters_to_context failed");
+  }
 
   AVDictionary* opts = options.release();
-  if (avcodec_open2(codec_context.get(), av_codec, &opts) != 0)
+  if (avcodec_open2(codec_context.get(), av_codec, &opts) != 0) {
     throw std::runtime_error("avcodec_open2 failed");
+  }
   options.reset(opts);
 
   return codec_context;
@@ -217,8 +223,9 @@ static SwsContextUP _create_converter(
       nullptr,
       nullptr,
       nullptr)};
-  if (!converter)
+  if (!converter) {
     throw std::runtime_error("Converter initialization failed");
+  }
   return converter;
 }
 
@@ -265,8 +272,9 @@ struct VideoReaderFFmpeg::Impl {
 
     if (options) {
       char* buf = NULL;
-      if (av_dict_get_string(options.get(), &buf, '=', ',') < 0)
+      if (av_dict_get_string(options.get(), &buf, '=', ',') < 0) {
         throw std::runtime_error("error formatting parameters dictionary");
+      }
       std::string options{buf};
       av_freep(&buf);
       throw std::runtime_error("unknown options: " + options);
@@ -304,14 +312,16 @@ struct VideoReaderFFmpeg::Impl {
               std::this_thread::sleep_for(std::chrono::milliseconds(100));
               {
                 std::lock_guard<SpinLock> guard(this->read_queue_lock);
-                if (this->read_queue.size() < 80)
+                if (this->read_queue.size() < 80) {
                   break;
+                }
               }
             }
             this->read_queue_lock.lock();  // lock here for easier unlock logic
           } else {  // realtime - clear buffer
-            for (int i = 0; i < 90; ++i)
+            for (int i = 0; i < 90; ++i) {
               this->read_queue.pop_front();
+            }
           }
         }
         this->read_queue_lock.unlock();
@@ -366,7 +376,7 @@ static void videoreader_ffmpeg_callback(void* avcl, int level, const char* fmt, 
   if (opaque == nullptr) {
     return;
   }
-  auto const impl = reinterpret_cast<VideoReaderFFmpeg::Impl*>(opaque);
+  auto *const impl = reinterpret_cast<VideoReaderFFmpeg::Impl*>(opaque);
   VideoReader::LogLevel const vr_level = [level]{
     if (level <= AV_LOG_FATAL) {
       return VideoReader::LogLevel::FATAL;
@@ -396,14 +406,14 @@ VideoReaderFFmpeg::VideoReaderFFmpeg(
   avformat_network_init();
   avdevice_register_all();
   av_log_set_level(AV_LOG_INFO);
-  if (log_callback != NULL) {
+  if (log_callback != nullptr) {
     av_log_set_callback(videoreader_ffmpeg_callback);
   }
 #if LIBAVFORMAT_VERSION_INT < AV_VERSION_INT(58,9,100)
   av_register_all();
 #endif
-  this->impl = std::unique_ptr<VideoReaderFFmpeg::Impl>(
-    new VideoReaderFFmpeg::Impl(url, parameter_pairs, log_callback, userdata)
+  this->impl = std::make_unique<VideoReaderFFmpeg::Impl>(
+    url, parameter_pairs, log_callback, userdata
   );
 }
 
@@ -460,20 +470,22 @@ VideoReader::FrameUP VideoReaderFFmpeg::next_frame(bool decode) {
     {
       int const receive_ret = avcodec_receive_frame(
           this->impl->codec_context.get(), this->impl->av_frame.get());
-      if (receive_ret == AVERROR(EAGAIN))
+      if (receive_ret == AVERROR(EAGAIN)) {
         continue;
-      if (receive_ret != 0)
+      }
+      if (receive_ret != 0) {
         throw std::runtime_error(
             "avcodec_receive_frame failed " + ret_to_string(receive_ret));
-
+      }
       FrameUP ret(new Frame());
       if (NewMinImagePrototype(
               &ret->image,
               this->impl->codec_context->width,
               this->impl->codec_context->height,
               3,
-              TYP_UINT8) != 0)
+              TYP_UINT8) != 0) {
         throw std::runtime_error("NewMinImagePrototype failed");
+      }
       if (!this->impl->sws_context) {  // because broken videos are weird
         this->impl->sws_context = _create_converter(
             (AVPixelFormat)this->impl->av_frame->format,
@@ -503,5 +515,5 @@ VideoReader::FrameUP VideoReaderFFmpeg::next_frame(bool decode) {
     }
     //}
   }  // while (true)
-  return FrameUP(nullptr);
+  return {nullptr};
 }
