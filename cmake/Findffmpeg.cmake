@@ -24,7 +24,14 @@ find_path(FFMPEG_INCLUDE_DIR libavcodec/avcodec.h
 
 if (FFMPEG_INCLUDE_DIR AND EXISTS "${FFMPEG_INCLUDE_DIR}/libavcodec/version.h")
   file(STRINGS "${FFMPEG_INCLUDE_DIR}/libavcodec/version.h" _LIBAVCODEC_DEFS REGEX "^[ \t]*#define[ \t]+LIBAVCODEC_VERSION_(MAJOR|MINOR|MICRO)")
-  string(REGEX REPLACE ".*_MAJOR[ \t]+([0-9]+).*" "\\1" LIBAVCODEC_VERSION_MAJ "${_LIBAVCODEC_DEFS}")
+  # parse major version
+  if (EXISTS "${FFMPEG_INCLUDE_DIR}/libavcodec/version_major.h")
+    file(STRINGS "${FFMPEG_INCLUDE_DIR}/libavcodec/version_major.h" _LIBAVCODEC_MAJOR_DEFS REGEX "^[ \t]*#define[ \t]+LIBAVCODEC_VERSION_MAJOR")
+    string(REGEX REPLACE ".*_MAJOR[ \t]+([0-9]+).*" "\\1" LIBAVCODEC_VERSION_MAJ "${_LIBAVCODEC_MAJOR_DEFS}")
+  else()
+    string(REGEX REPLACE ".*_MAJOR[ \t]+([0-9]+).*" "\\1" LIBAVCODEC_VERSION_MAJ "${_LIBAVCODEC_DEFS}")
+  endif()
+  # parse minor and micro versions
   string(REGEX REPLACE ".*_MINOR[ \t]+([0-9]+).*" "\\1" LIBAVCODEC_VERSION_MIN "${_LIBAVCODEC_DEFS}")
   string(REGEX REPLACE ".*_MICRO[ \t]+([0-9]+).*" "\\1" LIBAVCODEC_VERSION_MIC "${_LIBAVCODEC_DEFS}")
   set(LIBAVCODEC_VERSION_STRING "${LIBAVCODEC_VERSION_MAJ}.${LIBAVCODEC_VERSION_MIN}.${LIBAVCODEC_VERSION_MIC}")
