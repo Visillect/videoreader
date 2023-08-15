@@ -5,6 +5,7 @@ add_library(videoreader
   src/videoreader.cpp
   include/videoreader/videoreader.h
 )
+set_property(TARGET videoreader PROPERTY CXX_STANDARD 17)
 target_link_libraries(videoreader
 PUBLIC
   minbase
@@ -15,6 +16,8 @@ target_include_directories(videoreader PUBLIC include)
 if (UNIX)
   target_link_libraries(videoreader PRIVATE pthread)
 endif()
+
+option(VIDEOREADER_BUILD_CAPI "Videoreader: build C API" OFF)
 
 set(WITH_FFMPEG "OFF")
 if (FFMPEG_FOUND)
@@ -44,9 +47,33 @@ if (pylon_FOUND)
   )
 endif()
 
-message(STATUS "videoreader: FFMPEG[${WITH_FFMPEG}] PYLON[${WITH_PYLON}]")
+set(WITH_GALAXY "OFF")
+if (galaxy_FOUND)
+  set(WITH_GALAXY "ON")
+  target_compile_definitions(videoreader PRIVATE VIDEOREADER_WITH_GALAXY)
+  target_link_libraries(videoreader PRIVATE galaxy)
+  target_sources(videoreader PRIVATE
+    src/videoreader_galaxy.cpp
+    src/videoreader_galaxy.hpp
+  )
+endif()
 
-if(WITH_TESTS)
+message(STATUS
+  "videoreader: "
+  "FFMPEG[${WITH_FFMPEG}] "
+  "PYLON[${WITH_PYLON}] "
+  "GALAXY[${WITH_GALAXY}] "
+  "CAPI[${VIDEOREADER_BUILD_CAPI}]"
+)
+
+if (VIDEOREADER_BUILD_CAPI)
+  # we can expose C API from videoreader library itself, but
+  # it can be any of type, so make sure we create a SHARED library
+  add_library(videoreader_c SHARED src/videoreader_c.cpp)
+  target_link_libraries(videoreader_c PRIVATE videoreader)
+endif()
+
+if(BUILD_TESTING)
   add_executable(test_videoreader test/test_videoreader.cpp)
   target_link_libraries(test_videoreader PRIVATE videoreader gtest)
   target_compile_definitions(test_videoreader PRIVATE "TEST_VIDEOPATH=\"${CMAKE_CURRENT_LIST_DIR}/test/big_buck_bunny_480p_1mb.mp4\"")

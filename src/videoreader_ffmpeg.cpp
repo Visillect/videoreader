@@ -22,6 +22,7 @@ extern "C" {
 #include <mutex>
 #include <thread>
 #include <vector>
+#include <stdexcept>  // std::runtime_error
 
 class SpinLock {
   std::atomic_flag lck = ATOMIC_FLAG_INIT;
@@ -108,7 +109,7 @@ static AVFormatContextUP _get_format_context(
 {
   AVInputFormat const *input_format = nullptr;
   std::string path_to_use = filename;
-  if (filename.substr(0, 8) == "dshow://") {
+  if (filename.find("dshow://") == 0) {
     input_format = av_find_input_format("dshow");
     path_to_use = filename.substr(8, filename.size());
   }
