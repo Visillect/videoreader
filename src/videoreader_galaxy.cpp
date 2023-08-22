@@ -208,6 +208,133 @@ static std::unordered_map<std::string, GX_FEATURE_ID> const FLOAT_FEATURES {
   {"imu_room_temperature", GX_FLOAT_IMU_ROOM_TEMPERATURE},
 };
 
+static std::unordered_map<std::string, GX_FEATURE_ID> const ENUM_FEATURES {
+  {"device_link_throughput_limit_mode", GX_ENUM_DEVICE_LINK_THROUGHPUT_LIMIT_MODE},
+  {"device_temperature_selector", GX_ENUM_DEVICE_TEMPERATURE_SELECTOR},
+  {"lowpower_mode", GX_ENUM_LOWPOWER_MODE},
+  {"close_ccd", GX_ENUM_CLOSE_CCD},
+  {"pixel_size", GX_ENUM_PIXEL_SIZE},
+  {"pixel_color_filter", GX_ENUM_PIXEL_COLOR_FILTER},
+  {"pixel_format", GX_ENUM_PIXEL_FORMAT},
+  {"test_pattern", GX_ENUM_TEST_PATTERN},
+  {"test_pattern_generator_selector", GX_ENUM_TEST_PATTERN_GENERATOR_SELECTOR},
+  {"region_send_mode", GX_ENUM_REGION_SEND_MODE},
+  {"region_mode", GX_ENUM_REGION_MODE},
+  {"rregion_selector", GX_ENUM_RREGION_SELECTOR},
+  {"binning_horizontal_mode", GX_ENUM_BINNING_HORIZONTAL_MODE},
+  {"binning_vertical_mode", GX_ENUM_BINNING_VERTICAL_MODE},
+  {"sensor_shutter_mode", GX_ENUM_SENSOR_SHUTTER_MODE},
+  {"sensor_selector", GX_ENUM_SENSOR_SELECTOR},
+  {"sensor_bit_depth", GX_ENUM_SENSOR_BIT_DEPTH},
+  {"device_tap_geometry", GX_ENUM_DEVICE_TAP_GEOMETRY},
+  {"acquisition_mode", GX_ENUM_ACQUISITION_MODE},
+  {"trigger_mode", GX_ENUM_TRIGGER_MODE},
+  {"trigger_activation", GX_ENUM_TRIGGER_ACTIVATION},
+  {"trigger_switch", GX_ENUM_TRIGGER_SWITCH},
+  {"exposure_auto", GX_ENUM_EXPOSURE_AUTO},
+  {"trigger_source", GX_ENUM_TRIGGER_SOURCE},
+  {"exposure_mode", GX_ENUM_EXPOSURE_MODE},
+  {"trigger_selector", GX_ENUM_TRIGGER_SELECTOR},
+  {"transfer_control_mode", GX_ENUM_TRANSFER_CONTROL_MODE},
+  {"transfer_operation_mode", GX_ENUM_TRANSFER_OPERATION_MODE},
+  {"acquisition_frame_rate_mode", GX_ENUM_ACQUISITION_FRAME_RATE_MODE},
+  {"fixed_pattern_noise_correct_mode", GX_ENUM_FIXED_PATTERN_NOISE_CORRECT_MODE},
+  {"acquisition_status_selector", GX_ENUM_ACQUISITION_STATUS_SELECTOR},
+  {"exposure_time_mode", GX_ENUM_EXPOSURE_TIME_MODE},
+  {"acquisition_burst_mode", GX_ENUM_ACQUISITION_BURST_MODE},
+  {"overlap_mode", GX_ENUM_OVERLAP_MODE},
+  {"multisource_selector", GX_ENUM_MULTISOURCE_SELECTOR},
+  {"user_output_selector", GX_ENUM_USER_OUTPUT_SELECTOR},
+  {"user_output_mode", GX_ENUM_USER_OUTPUT_MODE},
+  {"strobe_switch", GX_ENUM_STROBE_SWITCH},
+  {"line_selector", GX_ENUM_LINE_SELECTOR},
+  {"line_mode", GX_ENUM_LINE_MODE},
+  {"line_source", GX_ENUM_LINE_SOURCE},
+  {"gain_auto", GX_ENUM_GAIN_AUTO},
+  {"gain_selector", GX_ENUM_GAIN_SELECTOR},
+  {"blacklevel_auto", GX_ENUM_BLACKLEVEL_AUTO},
+  {"blacklevel_selector", GX_ENUM_BLACKLEVEL_SELECTOR},
+  {"balance_white_auto", GX_ENUM_BALANCE_WHITE_AUTO},
+  {"balance_ratio_selector", GX_ENUM_BALANCE_RATIO_SELECTOR},
+  {"color_correct", GX_ENUM_COLOR_CORRECT},
+  {"dead_pixel_correct", GX_ENUM_DEAD_PIXEL_CORRECT},
+  {"gamma_mode", GX_ENUM_GAMMA_MODE},
+  {"light_source_preset", GX_ENUM_LIGHT_SOURCE_PRESET},
+  {"aa_light_environment", GX_ENUM_AA_LIGHT_ENVIRONMENT},
+  {"image_gray_raise_switch", GX_ENUM_IMAGE_GRAY_RAISE_SWITCH},
+  {"awb_lamp_house", GX_ENUM_AWB_LAMP_HOUSE},
+  {"sharpness_mode", GX_ENUM_SHARPNESS_MODE},
+  {"user_data_filed_selector", GX_ENUM_USER_DATA_FILED_SELECTOR},
+  {"flat_field_correction", GX_ENUM_FLAT_FIELD_CORRECTION},
+  {"noise_reduction_mode", GX_ENUM_NOISE_REDUCTION_MODE},
+  {"static_defect_correction", GX_ENUM_STATIC_DEFECT_CORRECTION},
+  {"2d_noise_reduction_mode", GX_ENUM_2D_NOISE_REDUCTION_MODE},
+  {"3d_noise_reduction_mode", GX_ENUM_3D_NOISE_REDUCTION_MODE},
+  {"shading_correction_mode", GX_ENUM_SHADING_CORRECTION_MODE},
+  {"ffc_generate_status", GX_ENUM_FFC_GENERATE_STATUS},
+  {"ffc_expected_gray_value_enable", GX_ENUM_FFC_EXPECTED_GRAY_VALUE_ENABLE},
+  {"dsnu_selector", GX_ENUM_DSNU_SELECTOR},
+  {"dsnu_generate_status", GX_ENUM_DSNU_GENERATE_STATUS},
+  {"prnu_selector", GX_ENUM_PRNU_SELECTOR},
+  {"prnu_generate_status", GX_ENUM_PRNU_GENERATE_STATUS},
+  {"ffc_coefficient", GX_ENUM_FFC_COEFFICIENT},
+  {"user_set_selector", GX_ENUM_USER_SET_SELECTOR},
+  {"user_set_default", GX_ENUM_USER_SET_DEFAULT},
+  {"event_selector", GX_ENUM_EVENT_SELECTOR},
+  {"event_notification", GX_ENUM_EVENT_NOTIFICATION},
+  {"event_simple_mode", GX_ENUM_EVENT_SIMPLE_MODE},
+  {"lut_selector", GX_ENUM_LUT_SELECTOR},
+  {"chunk_selector", GX_ENUM_CHUNK_SELECTOR},
+  {"color_transformation_mode", GX_ENUM_COLOR_TRANSFORMATION_MODE},
+  {"color_transformation_value_selector", GX_ENUM_COLOR_TRANSFORMATION_VALUE_SELECTOR},
+  {"saturation_mode", GX_ENUM_SATURATION_MODE},
+  {"timer_selector", GX_ENUM_TIMER_SELECTOR},
+  {"timer_trigger_source", GX_ENUM_TIMER_TRIGGER_SOURCE},
+  {"counter_selector", GX_ENUM_COUNTER_SELECTOR},
+  {"counter_event_source", GX_ENUM_COUNTER_EVENT_SOURCE},
+  {"counter_reset_source", GX_ENUM_COUNTER_RESET_SOURCE},
+  {"counter_reset_activation", GX_ENUM_COUNTER_RESET_ACTIVATION},
+  {"counter_trigger_source", GX_ENUM_COUNTER_TRIGGER_SOURCE},
+  {"timer_trigger_activation", GX_ENUM_TIMER_TRIGGER_ACTIVATION},
+  {"remove_parameter_limit", GX_ENUM_REMOVE_PARAMETER_LIMIT},
+  {"hdr_mode", GX_ENUM_HDR_MODE},
+  {"mgc_mode", GX_ENUM_MGC_MODE},
+  {"imu_config_acc_range", GX_ENUM_IMU_CONFIG_ACC_RANGE},
+  {"imu_config_acc_odr_low_pass_filter_switch", GX_ENUM_IMU_CONFIG_ACC_ODR_LOW_PASS_FILTER_SWITCH},
+  {"imu_config_acc_odr", GX_ENUM_IMU_CONFIG_ACC_ODR},
+  {"imu_config_acc_odr_low_pass_filter_frequency", GX_ENUM_IMU_CONFIG_ACC_ODR_LOW_PASS_FILTER_FREQUENCY},
+  {"imu_config_gyro_xrange", GX_ENUM_IMU_CONFIG_GYRO_XRANGE},
+  {"imu_config_gyro_yrange", GX_ENUM_IMU_CONFIG_GYRO_YRANGE},
+  {"imu_config_gyro_zrange", GX_ENUM_IMU_CONFIG_GYRO_ZRANGE},
+  {"imu_config_gyro_odr_low_pass_filter_switch", GX_ENUM_IMU_CONFIG_GYRO_ODR_LOW_PASS_FILTER_SWITCH},
+  {"imu_config_gyro_odr", GX_ENUM_IMU_CONFIG_GYRO_ODR},
+  {"imu_config_gyro_odr_low_pass_filter_frequency", GX_ENUM_IMU_CONFIG_GYRO_ODR_LOW_PASS_FILTER_FREQUENCY},
+  {"imu_temperature_odr", GX_ENUM_IMU_TEMPERATURE_ODR},
+  {"serialport_selector", GX_ENUM_SERIALPORT_SELECTOR},
+  {"serialport_source", GX_ENUM_SERIALPORT_SOURCE},
+  {"serialport_baudrate", GX_ENUM_SERIALPORT_BAUDRATE},
+  {"serialport_stop_bits", GX_ENUM_SERIALPORT_STOP_BITS},
+  {"serialport_parity", GX_ENUM_SERIALPORT_PARITY},
+  {"cxp_link_configuration", GX_ENUM_CXP_LINK_CONFIGURATION},
+  {"cxp_link_configuration_preferred", GX_ENUM_CXP_LINK_CONFIGURATION_PREFERRED},
+  {"cxp_link_configuration_status", GX_ENUM_CXP_LINK_CONFIGURATION_STATUS},
+  {"cxp_connection_selector", GX_ENUM_CXP_CONNECTION_SELECTOR},
+  {"cxp_connection_test_mode", GX_ENUM_CXP_CONNECTION_TEST_MODE},
+  {"sequencer_mode", GX_ENUM_SEQUENCER_MODE},
+  {"sequencer_configuration_mode", GX_ENUM_SEQUENCER_CONFIGURATION_MODE},
+  {"sequencer_feature_selector", GX_ENUM_SEQUENCER_FEATURE_SELECTOR},
+  {"sequencer_trigger_source", GX_ENUM_SEQUENCER_TRIGGER_SOURCE},
+  {"encoder_selector", GX_ENUM_ENCODER_SELECTOR},
+  {"encoder_direction", GX_ENUM_ENCODER_DIRECTION},
+  {"encoder_sourcea", GX_ENUM_ENCODER_SOURCEA},
+  {"encoder_sourceb", GX_ENUM_ENCODER_SOURCEB},
+  {"encoder_mode", GX_ENUM_ENCODER_MODE},
+  {"um_resend_mode", GX_DS_ENUM_RESEND_MODE},
+  {"um_stop_acquisition_mode", GX_DS_ENUM_STOP_ACQUISITION_MODE},
+  {"um_stream_buffer_handling_mode", GX_DS_ENUM_STREAM_BUFFER_HANDLING_MODE},
+};
+
+
 struct VideoReaderGalaxy::Impl {
   GX_DEV_HANDLE handle;
   std::deque<FrameUP> read_queue;
@@ -235,6 +362,34 @@ struct VideoReaderGalaxy::Impl {
         double float_value = std::stod(value);
         GALAXY_CHECK(GXSetFloat(handle, pair->second, float_value));
       }
+      if (auto pair = ENUM_FEATURES.find(key); pair != ENUM_FEATURES.end()) {
+        uint32_t nums = 0;
+        GALAXY_CHECK(GXGetEnumEntryNums(handle, pair->second, &nums));
+        size_t nBufferSize = nums * sizeof(GX_ENUM_DESCRIPTION);
+		    auto const pEnumDescription = std::unique_ptr<GX_ENUM_DESCRIPTION[]>(new GX_ENUM_DESCRIPTION[nums]);
+        GALAXY_CHECK(GXGetEnumDescription(handle, pair->second, pEnumDescription.get(), &nBufferSize));
+        uint32_t entry_idx = 0;
+        for (; entry_idx < nums; ++entry_idx) {
+          auto const& item = pEnumDescription.get()[entry_idx];
+          if (item.szSymbolic == value) {
+            GALAXY_CHECK(GXSetEnum(handle, pair->second, item.nValue));
+            break;
+          }
+        }
+        if (entry_idx == nums) {
+          std::string valid_values;
+          for (entry_idx = 0; entry_idx < nums; ++entry_idx) {
+            if (entry_idx) {
+              valid_values += ", ";
+            }
+            valid_values += "`" + std::string(pEnumDescription.get()[entry_idx].szSymbolic) + "`";
+          }
+          throw std::runtime_error(
+            "Failed to set `" + key + "` to `" + value + "`. Valid values are: " + valid_values + "."
+          );
+        }
+      }
+
     }
 
     this->thread = std::thread(&VideoReaderGalaxy::Impl::read, this);
