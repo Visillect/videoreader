@@ -18,6 +18,8 @@ int videoreader_create(
     videoreader_log callback,
     void* userdata);
 
+char const* videoreader_what(void);
+
 void videoreader_delete(struct videoreader*);
 
 int videoreader_next_frame(
@@ -60,15 +62,16 @@ class VideoReader:
         self.log_callback = log_callback
         self.frame_idx = 0
 
-        argv_keepalive = [ffi.new("char[]", arg) for arg in arguments]
-        backend.videoreader_create(
+        argv_keepalive = [ffi.new("char[]", arg.encode()) for arg in arguments]
+        if backend.videoreader_create(
             handler,
             str(path).encode("utf-8"),
             argv_keepalive,
             len(argv_keepalive),
             videoreader_log if log_callback else ffi.NULL,
             ffi.new_handle(self),
-        )
+        ) != 0:
+            raise ValueError(ffi.string(backend.videoreader_what()).decode())
         self._handler = ffi.gc(handler[0], backend.videoreader_delete)
 
     def __iter__(self, decode:bool=True) -> Iterator[tuple[MinImg, int, float]]:
@@ -84,11 +87,14 @@ class VideoReader:
                 decode,
             )
             self.frame_idx += 1
-            if ret != 0:
+            if ret == 0:
+                img = MinImg(image)
+                assert img._mi.is_owner
+                yield img, number[0], timestamp[0]
+            elif ret == 1:  # empty frame
                 return
-            img = MinImg(image)
-            assert img._mi.is_owner
-            yield img, number[0], timestamp[0]
+            else:
+                raise ValueError(ffi.string(backend.videoreader_what()).decode())
 
     def iter_fast(self):
         return self.__iter__(decode=False)

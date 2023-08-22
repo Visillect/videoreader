@@ -4,6 +4,12 @@
 #define API extern "C"
 typedef void (*videoreader_log)(char*, int, void*);
 
+static std::string videoreader_what_str;
+
+API char const* videoreader_what(void) {
+  return videoreader_what_str.c_str();
+}
+
 API int videoreader_create(
     struct videoreader** reader,
     const char* video_path,
@@ -11,16 +17,21 @@ API int videoreader_create(
     int argc,
     videoreader_log callback,
     void* userdata) {
-  std::vector<std::string> parameter_pairs;
-  for (int idx{} ; idx < argc; ++idx ) {
-    parameter_pairs.emplace_back(argv[idx]);
+  try {
+    std::vector<std::string> parameter_pairs;
+    for (int idx{} ; idx < argc; ++idx ) {
+      parameter_pairs.emplace_back(argv[idx]);
+    }
+    auto video_reader = VideoReader::create(
+        video_path,
+        std::move(parameter_pairs),
+        reinterpret_cast<VideoReader::LogCallback>(callback),
+        userdata);
+    *reader = reinterpret_cast<struct videoreader*>(video_reader.release());
+  } catch (std::exception& e) {
+    videoreader_what_str = e.what();
+    return -1;
   }
-  auto video_reader = VideoReader::create(
-      video_path,
-      std::move(parameter_pairs),
-      reinterpret_cast<VideoReader::LogCallback>(callback),
-      userdata);
-  *reader = reinterpret_cast<struct videoreader*>(video_reader.release());
   return 0;
 }
 
@@ -34,15 +45,20 @@ API int videoreader_next_frame(
     uint64_t* number,
     double* timestamp_s,
     bool decode) {
-  VideoReader::FrameUP frame =
-      reinterpret_cast<VideoReader*>(reader)->next_frame(decode);
-  if (!frame)
-    return 1;
+  try {
+    VideoReader::FrameUP frame =
+        reinterpret_cast<VideoReader*>(reader)->next_frame(decode);
+    if (!frame)
+      return 1;
 
-  *dst_img = frame->image;
-  *number = frame->number;
-  *timestamp_s = frame->timestamp_s;
-  frame->image.is_owner = false;
+    *dst_img = frame->image;
+    *number = frame->number;
+    *timestamp_s = frame->timestamp_s;
+    frame->image.is_owner = false;
+  } catch (std::exception& e) {
+    videoreader_what_str = e.what();
+    return -1;
+  }
   return 0;
 }
 
