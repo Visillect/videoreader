@@ -9,11 +9,8 @@
 //   * Doesn't support dynamic resolution change
 
 extern "C" {
-#include <libavcodec/avcodec.h>
 #include <libavdevice/avdevice.h>
-#include <libavformat/avformat.h>
 #include <libavutil/avutil.h>
-#include <libswscale/swscale.h>
 #include <libavformat/avio.h> // needed?
 }
 #include <atomic>
@@ -23,84 +20,9 @@ extern "C" {
 #include <thread>
 #include <vector>
 #include <stdexcept>  // std::runtime_error
+#include "spinlock.hpp"
+#include "ffmpeg_common.hpp"
 
-class SpinLock {
-  std::atomic_flag lck = ATOMIC_FLAG_INIT;
-
-public:
-  void lock() {
-    while (lck.test_and_set(std::memory_order_acquire))
-      ;
-  }
-  void unlock() {
-    lck.clear(std::memory_order_release);
-  }
-};
-
-struct AVPacketDeleter {
-  void operator()(AVPacket* p) const noexcept {
-    av_packet_free(&p);
-  }
-};
-using AVPacketUP = std::unique_ptr<AVPacket, AVPacketDeleter>;
-
-struct AVFormatContextDeleter {
-  void operator()(AVFormatContext* c) const noexcept {
-    avformat_close_input(&c);
-    avformat_free_context(c);
-  }
-};
-using AVFormatContextUP =
-    std::unique_ptr<AVFormatContext, AVFormatContextDeleter>;
-
-struct AVCodecContextDeleter {
-  void operator()(AVCodecContext* ctx) const noexcept {
-    avcodec_close(ctx);
-    avcodec_free_context(&ctx);
-  }
-};
-using AVCodecContextUP = std::unique_ptr<AVCodecContext, AVCodecContextDeleter>;
-
-struct SwsContextDeleter {
-  void operator()(SwsContext* sws_context) const noexcept {
-    sws_freeContext(sws_context);
-  }
-};
-using SwsContextUP = std::unique_ptr<SwsContext, SwsContextDeleter>;
-
-struct AVFrameDeleter {
-  void operator()(AVFrame* av_frame) const noexcept {
-    av_frame_free(&av_frame);
-  }
-};
-using AVFrameUP = std::unique_ptr<AVFrame, AVFrameDeleter>;
-
-struct AVDictionaryDeleter {
-  void operator()(AVDictionary* av_dictionary) const noexcept {
-    av_dict_free(&av_dictionary);
-  }
-};
-using AVDictionaryUP = std::unique_ptr<AVDictionary, AVDictionaryDeleter>;
-
-static AVDictionaryUP
-_create_dict_from_params_vec(std::vector<std::string> const& parameter_pairs) {
-  AVDictionary* options = nullptr;
-  for (std::vector<std::string>::const_iterator it = parameter_pairs.begin();
-       it != parameter_pairs.end();
-       ++it) {
-    std::string const& key = *it;
-    std::string const& value = *++it;
-    av_dict_set(&options, key.c_str(), value.c_str(), 0);
-  }
-  return AVDictionaryUP{options};
-}
-
-static std::string ret_to_string(int ernum) {
-  char buf[4096];
-  if (av_strerror(ernum, buf, sizeof(buf)) == 0)
-    return buf;
-  return "unknown error (ret=" + std::to_string(ernum) + ")";
-}
 
 static AVFormatContextUP _get_format_context(
   std::string const& filename,
@@ -130,7 +52,7 @@ static AVFormatContextUP _get_format_context(
   options.reset(opts);
   if (ret < 0) {
     throw std::runtime_error(
-      "Can't open `" + filename + "`, " + ret_to_string(ret));
+      "Can't open `" + filename + "`, " + get_av_error(ret));
   }
   return AVFormatContextUP(format_context);
 }
@@ -138,7 +60,7 @@ static AVFormatContextUP _get_format_context(
 /*
 This is a copy from libavformat/internal.h. Helps with logging big time.
 */
-struct DirdyHackFFStream {
+struct DirtyHackFFStream {
     int reorder;
     struct AVBSFContext *bsfc;
     int bitstream_checked;
@@ -150,9 +72,9 @@ static AVStream* _get_video_stream(AVFormatContext* format_context)
   for (unsigned stream_idx = 0; stream_idx < format_context->nb_streams;
        ++stream_idx) {
 #   ifdef FF_API_AVIOFORMAT
-    reinterpret_cast<DirdyHackFFStream*>(format_context->streams[stream_idx]->internal)
+    reinterpret_cast<DirtyHackFFStream*>(format_context->streams[stream_idx]->internal)
 #   else
-    reinterpret_cast<DirdyHackFFStream*>(format_context->streams[stream_idx] + 1)
+    reinterpret_cast<DirtyHackFFStream*>(format_context->streams[stream_idx] + 1)
 #   endif
     ->avctx->opaque = format_context->opaque;
   }
@@ -478,7 +400,7 @@ VideoReader::FrameUP VideoReaderFFmpeg::next_frame(bool decode) {
       }
       if (receive_ret != 0) {
         throw std::runtime_error(
-            "avcodec_receive_frame failed " + ret_to_string(receive_ret));
+            "avcodec_receive_frame failed " + get_av_error(receive_ret));
       }
       FrameUP ret(new Frame());
       if (NewMinImagePrototype(

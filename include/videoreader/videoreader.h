@@ -26,7 +26,7 @@ public:
   };
 
   using FrameUP = std::unique_ptr<Frame>;
-  using LogCallback = void (*)(char * message, LogLevel log_level, void* userdata);
+  using LogCallback = void (*)(char const* message, LogLevel log_level, void* userdata);
 
   // url: file path or any ffmpeg url
   // parameter_pairs: protocol parameters, for example:

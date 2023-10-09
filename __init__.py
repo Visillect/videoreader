@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-from typing import Callable, Iterator
+from typing import Callable, Iterator, NoReturn
 from minimg import MinImg, ffi_new as minimg_ffi_new
 
 from cffi import FFI
@@ -8,7 +8,7 @@ from cffi import FFI
 ffi = FFI()
 
 header = """
-typedef void (*videoreader_log)(char*, int, void*);
+typedef void (*videoreader_log)(char const*, int, void*);
 
 int videoreader_create(
     struct videoreader**,
@@ -30,6 +30,27 @@ int videoreader_next_frame(
     bool decode);
 
 int videoreader_size(struct videoreader*, uint64_t* count);
+
+// writer
+int videowriter_create(
+    struct videowriter** writer,
+    char const* video_path,
+    struct MinImg const* frame_format,
+    char const* argv[],
+    int argc,
+    bool,
+    videoreader_log callback,
+    void* userdata
+);
+
+void videowriter_delete(struct videowriter* reader);
+
+int videowriter_push(
+    struct videowriter* writer,
+    struct MinImg const* img,
+    double timestamp_s);
+
+int videowriter_close(struct videowriter* writer);
 """
 ffi.cdef(header)
 
@@ -40,8 +61,8 @@ except OSError as e:
     raise OSError(f'cant load dll "{path}", make sure it is compiled')
 
 
-@ffi.callback("void(char*, int, void*)")
-def videoreader_log(message, level, handler):
+@ffi.callback("void(char const*, int, void*)")
+def videoreader_log(message: ffi.CData, level: int, handler: ffi.CData):
     message = ffi.string(message).decode()
     ffi.from_handle(handler).log_callback(level, message)
 
@@ -51,6 +72,9 @@ ERROR = 1
 WARNING = 2
 INFO = 3
 DEBUG = 4
+
+def raise_error() -> NoReturn:
+    raise ValueError(ffi.string(backend.videoreader_what()).decode())
 
 
 class VideoReader:
@@ -71,7 +95,7 @@ class VideoReader:
             videoreader_log if log_callback else ffi.NULL,
             ffi.new_handle(self),
         ) != 0:
-            raise ValueError(ffi.string(backend.videoreader_what()).decode())
+            raise_error()
         self._handler = ffi.gc(handler[0], backend.videoreader_delete)
 
     def __iter__(self, decode:bool=True) -> Iterator[tuple[MinImg, int, float]]:
@@ -94,7 +118,7 @@ class VideoReader:
             elif ret == 1:  # empty frame
                 return
             else:
-                raise ValueError(ffi.string(backend.videoreader_what()).decode())
+                raise_error()
 
     def iter_fast(self):
         return self.__iter__(decode=False)
@@ -117,6 +141,52 @@ class VideoReader:
         return frame
 
 
+class ViderWriter:
+    def __init__(self,
+                 path: str,
+                 width: int,
+                 height: int,
+                 arguments: list[str] = [],
+                 realtime=False,
+                 log_callback: Callable[[str, int], None] | None=None):
+        handler = ffi.new("struct videowriter **")
+        self.log_callback = log_callback
+        self.frame_idx = 0
+
+        argv_keepalive = [ffi.new("char[]", arg.encode()) for arg in arguments]
+        image = minimg_ffi_new("MinImg *", {'width': width, 'height': height, 'channels': 1, 'scalar_type': 0})
+        if backend.videowriter_create(
+            handler,
+            str(path).encode("utf-8"),
+            ffi.cast("struct MinImg *", image),
+            argv_keepalive,
+            len(argv_keepalive),
+            realtime,
+            videoreader_log if log_callback else ffi.NULL,
+            ffi.new_handle(self),
+        ) != 0:
+            raise_error()
+        self._handler = ffi.gc(handler[0], backend.videowriter_delete)
+
+    def push(self, image: MinImg, timestamp: float) -> bool:
+        ret: int = backend.videowriter_push(
+            self._handler,
+            ffi.cast("struct MinImg *", image[:]._mi),
+            timestamp
+        )
+        if ret < 0:
+            raise_error()
+        return ret == 0
+
+    def close(self) -> None:
+        if backend.videowriter_close(self._handler) != 0:
+            raise_error()
+
+    def __del__(self):
+        if hasattr(self, '_handler'):  # `videowriter_create` success
+            self.close()
+
+
 def videoreader_n_frames(uri: str) -> int:
     """
     Get number of frames in a file
@@ -136,10 +206,17 @@ if __name__ == "__main__":
     parser = ArgumentParser()
     default = Path(__file__).parent / 'test' / 'big_buck_bunny_480p_1mb.mp4'
     parser.add_argument('uri', nargs='?', default=default)
-    reader = VideoReader(parser.parse_args().uri)
-    idx = 0
+    parser.add_argument('out', nargs='?')
+    args = parser.parse_args()
+    reader = VideoReader(args.uri)
+    if args.out:
+        writer = ViderWriter(args.out, 640, 480, arguments=[], log_callback=print, realtime=True)
+    delay = 0.0
     for img, number, timestamp in reader:
         print(img, number, timestamp)
-        idx += 1
-        if idx > 10:
-            break
+        if args.out:
+            from random import random
+            delay += 0.0  # random() * 2
+            ret = writer.push(img, timestamp * (1.0) + delay)
+            if not ret:
+                print(f"skipping frame {number}!")

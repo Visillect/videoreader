@@ -1,21 +1,29 @@
 project(videoreader)
 
-
 add_library(videoreader
   src/videoreader.cpp
   include/videoreader/videoreader.h
 )
-set_property(TARGET videoreader PROPERTY CXX_STANDARD 17)
-target_link_libraries(videoreader
-PUBLIC
-  minbase
-PRIVATE
-  minimgapi
+add_library(videowriter
+  src/videowriter.cpp
+  include/videoreader/videowriter.h
 )
-target_include_directories(videoreader PUBLIC include)
-if (UNIX)
-  target_link_libraries(videoreader PRIVATE pthread)
-endif()
+
+macro(videoreader_setup target)
+  set_property(TARGET ${target} PROPERTY CXX_STANDARD 17)
+  target_link_libraries(${target}
+  PUBLIC
+    minbase
+  PRIVATE
+    minimgapi
+  )
+  target_include_directories(${target} PUBLIC include)
+  if (UNIX)
+    target_link_libraries(${target} PRIVATE pthread)
+  endif()
+endmacro()
+
+videoreader_setup(videoreader)
 
 option(VIDEOREADER_BUILD_CAPI "Videoreader: build C API" OFF)
 
@@ -33,7 +41,21 @@ if (FFMPEG_FOUND)
   target_sources(videoreader PRIVATE
     src/videoreader_ffmpeg.cpp
     src/videoreader_ffmpeg.hpp
+    src/ffmpeg_common.cpp
+    src/ffmpeg_common.hpp
   )
+
+  # enable videowriter
+  videoreader_setup(videowriter)
+  target_link_libraries(videowriter PRIVATE videoreader)
+  target_link_libraries(videowriter PRIVATE
+    ffmpeg::avcodec
+    ffmpeg::avdevice
+    ffmpeg::avformat
+    ffmpeg::avutil
+    ffmpeg::swscale
+  )
+
 endif()
 
 set(WITH_PYLON "OFF")
@@ -70,7 +92,7 @@ if (VIDEOREADER_BUILD_CAPI)
   # we can expose C API from videoreader library itself, but
   # it can be any of type, so make sure we create a SHARED library
   add_library(videoreader_c SHARED src/videoreader_c.cpp)
-  target_link_libraries(videoreader_c PRIVATE videoreader)
+  target_link_libraries(videoreader_c PRIVATE videoreader videowriter)
 endif()
 
 if(BUILD_TESTING)
