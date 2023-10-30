@@ -7,6 +7,7 @@ public:
   VideoReaderFFmpeg(
     std::string const& url,
     std::vector<std::string> const& parameter_pairs,
+    std::vector<std::string> const& extras,
     VideoReader::LogCallback log_callback,
     void* userdata
   );

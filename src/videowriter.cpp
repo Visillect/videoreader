@@ -43,12 +43,12 @@ struct VideoWriter::Impl {
   AVFormatContextUP oc;
   MinImg m_frameTemplate;
 
-  // for realtime
   const bool realtime;
   std::thread write_thread;
   std::deque<AVFrameUP> write_queue;
   std::condition_variable cv;
   std::mutex m;
+  std::exception_ptr exception;
 
   Impl(bool realtime):
     pkt(av_packet_alloc()), realtime{realtime}
@@ -93,18 +93,23 @@ struct VideoWriter::Impl {
   }
 
   void write() {
-    AVFrameUP frame{};
-    for (;;) {
-      {
-        std::unique_lock lk(m);
-        cv.wait(lk, [&]{return !this->write_queue.empty() ;});
-        frame = std::move(this->write_queue.front());
-        this->write_queue.pop_front();
+    AVFrameUP popped_frame{};
+    try {
+      for (;;) {
+        {
+          std::unique_lock lk(m);
+          cv.wait(lk, [&]{return !this->write_queue.empty() ;});
+          popped_frame = std::move(this->write_queue.front());
+          this->write_queue.pop_front();
+        }
+        this->send_frame(popped_frame.get());
+        if (!popped_frame) {
+          break;
+        }
       }
-      this->send_frame(frame.get());
-      if (!frame) {
-        break;
-      }
+    }
+    catch (...) {
+      this->exception = std::current_exception();
     }
   }
 
@@ -123,21 +128,26 @@ struct VideoWriter::Impl {
       this->frame->linesize); ret < 0) {
       throw std::runtime_error(format_error(ret, "sws_scale() failed"));
     }
+    if (this->exception) {
+      std::rethrow_exception(this->exception);
+    }
+    this->frame->pts = std::llround(frame.timestamp_s * 65535.0);
     if (this->realtime) {
-      this->frame->pts = std::llround(frame.timestamp_s * 65535.0);
-      this->send_frame(this->frame.get());
-      return true;
-    } else {
       AVFrameUP dynframe{av_frame_alloc()};
-      dynframe->pts = std::llround(frame.timestamp_s * 65535.0);
+      // `av_frame_ref` is so bad. We make a copy. It could be 300% better.
+      if (const int ret = av_frame_ref(dynframe.get(), this->frame.get()); ret < 0) {
+        throw std::runtime_error(format_error(ret, "av_frame_ref() failed"));
+      }
       std::unique_lock lk(this->m);
       if (this->write_queue.size() > 9) {
         return false;  //
       }
       this->write_queue.push_back(std::move(dynframe));
       this->cv.notify_one();
-      return true;
+    } else {
+      this->send_frame(this->frame.get());
     }
+    return true;
   }
 
   void close() {
@@ -147,7 +157,12 @@ struct VideoWriter::Impl {
         this->write_queue.push_back(nullptr);
         this->cv.notify_one();
       }
-      this->write_thread.join();
+      if (this->write_thread.joinable()) {
+        this->write_thread.join();
+      }
+      if (this->exception) {
+        std::rethrow_exception(this->exception);
+      }
     } else {
       this->send_frame(nullptr);
     }
@@ -321,4 +336,9 @@ void VideoWriter::close() {
   this->impl.reset(nullptr);
 }
 
-VideoWriter::~VideoWriter() = default;
+VideoWriter::~VideoWriter() {
+  if (this->impl) {
+    this->impl->close();
+    this->impl.reset(nullptr);
+  }
+};

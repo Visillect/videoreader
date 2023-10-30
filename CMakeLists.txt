@@ -43,6 +43,8 @@ if (FFMPEG_FOUND)
     src/videoreader_ffmpeg.hpp
     src/ffmpeg_common.cpp
     src/ffmpeg_common.hpp
+    src/thismsgpack.cpp
+    src/thismsgpack.hpp
   )
 
   # enable videowriter
@@ -77,6 +79,8 @@ if (galaxy_FOUND)
   target_sources(videoreader PRIVATE
     src/videoreader_galaxy.cpp
     src/videoreader_galaxy.hpp
+    src/thismsgpack.cpp
+    src/thismsgpack.hpp
   )
 endif()
 

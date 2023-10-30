@@ -16,6 +16,8 @@ API int videoreader_create(
     char const* video_path,
     char const* argv[],
     int argc,
+    char const* extras[],
+    int extrasc,
     videoreader_log callback,
     void* userdata) {
   try {
@@ -23,9 +25,14 @@ API int videoreader_create(
     for (int idx{} ; idx < argc; ++idx ) {
       parameter_pairs.emplace_back(argv[idx]);
     }
+    std::vector<std::string> extras_vec;
+    for (int idx{} ; idx < extrasc; ++idx ) {
+      extras_vec.emplace_back(extras[idx]);
+    }
     auto video_reader = VideoReader::create(
         video_path,
         std::move(parameter_pairs),
+        std::move(extras_vec),
         reinterpret_cast<VideoReader::LogCallback>(callback),
         userdata);
     *reader = reinterpret_cast<struct videoreader*>(video_reader.release());
@@ -36,6 +43,25 @@ API int videoreader_create(
   return 0;
 }
 
+API int videoreader_set(
+    struct videoreader* reader,
+    char const* argv[],
+    int argc
+) {
+  try {
+    std::vector<std::string> parameter_pairs;
+    for (int idx{} ; idx < argc; ++idx ) {
+      parameter_pairs.emplace_back(argv[idx]);
+    }
+    reinterpret_cast<VideoReader*>(reader)->set(parameter_pairs);
+  } catch (std::exception& e) {
+    videoreader_what_str = e.what();
+    return -1;
+  }
+  return 0;
+}
+
+
 API void videoreader_delete(struct videoreader* reader) {
   delete reinterpret_cast<VideoReader*>(reader);
 }
@@ -45,6 +71,8 @@ API int videoreader_next_frame(
     MinImg* dst_img,
     uint64_t* number,
     double* timestamp_s,
+    unsigned const char* extras[],
+    unsigned int* extras_size,
     bool decode) {
   try {
     VideoReader::FrameUP frame =
@@ -55,7 +83,10 @@ API int videoreader_next_frame(
     *dst_img = frame->image;
     *number = frame->number;
     *timestamp_s = frame->timestamp_s;
+    *extras = frame->extras;
+    *extras_size = frame->extras_size;
     frame->image.is_owner = false;
+    frame->extras = nullptr;
   } catch (std::exception& e) {
     videoreader_what_str = e.what();
     return -1;

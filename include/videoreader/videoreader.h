@@ -14,7 +14,9 @@ public:
     MinImg image;
     number_t number;  // zero-indexed; this number is not continuous due to possible invalid data frames
     timestamp_s_t timestamp_s;  // seconds since the start of the video
-    ~Frame();  // Frees MinImg
+    unsigned char const* extras;  // nullptr ot msgpack list in requested order
+    unsigned int extras_size;  // num bytes
+    ~Frame();  // Frees MinImg and extras
   };
 
   enum class LogLevel : int {  // int so the interface can be used from `C`
@@ -39,6 +41,7 @@ public:
   static std::unique_ptr<VideoReader> create(
     std::string const& url,
     std::vector<std::string> const& parameter_pairs = {}, // size % 2 == 0
+    std::vector<std::string> const& extras = {},  // for extra_data
     LogCallback log_callback = nullptr,
     void* userdata = nullptr
   );
@@ -48,6 +51,9 @@ public:
 
   // number of frames if known or 0 (see AVStream::nb_frames)
   virtual Frame::number_t size() const = 0;
+
+  // see `parameter_pairs` from constructor
+  virtual void set(std::vector<std::string> const& parameter_pairs);
 
   // offline video should be seekable, realtime not (see AVIOContext::seekable)
   virtual bool is_seekable() const = 0;

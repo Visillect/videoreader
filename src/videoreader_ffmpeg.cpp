@@ -22,6 +22,7 @@ extern "C" {
 #include <stdexcept>  // std::runtime_error
 #include "spinlock.hpp"
 #include "ffmpeg_common.hpp"
+#include "thismsgpack.hpp"
 
 
 static AVFormatContextUP _get_format_context(
@@ -154,6 +155,43 @@ static SwsContextUP _create_converter(
   return converter;
 }
 
+struct AVFramePusher {
+  enum class Type {
+    INT64_T, INT
+  } _type;
+  void* AVFrame::*ref;
+
+  AVFramePusher(int64_t AVFrame::*ref) : _type{Type::INT64_T},
+  ref{reinterpret_cast<void* AVFrame::*>(ref)} {}
+  AVFramePusher(int AVFrame::*ref) : _type{Type::INT},
+  ref{reinterpret_cast<void* AVFrame::*>(ref)} {}
+
+  void operator()(AVFrame const* frame, MallocStream &out) const{
+    switch (this->_type)
+    {
+    case Type::INT64_T: {
+      auto const value = frame->*(reinterpret_cast<int64_t AVFrame::*>(this->ref));
+      thismsgpack::pack(value, out);
+      break;
+    }
+    case Type::INT: {
+      auto const value = frame->*(reinterpret_cast<int AVFrame::*>(this->ref));
+      thismsgpack::pack(static_cast<int64_t>(value), out);
+      break;
+    }
+    }
+  }
+};
+
+// template<typename T>
+// auto create_pusher(T AVFrame::*ref) {
+//   return [ref](AVFrame const* frame, MallocStream &out) {
+//     auto const value = frame->*(this->ref);
+//     thismsgpack::pack(value, out);
+//   }
+// }
+
+
 struct VideoReaderFFmpeg::Impl {
   decltype(VideoReader::Frame::number) current_frame = 0;
   std::atomic<bool> stop_requested;
@@ -171,10 +209,12 @@ struct VideoReaderFFmpeg::Impl {
   VideoReader::LogCallback log_callback;
   void* userdata;
   int print_prefix;
+  std::vector<AVFramePusher> pushers;
 
   Impl(
     std::string const& url,
     std::vector<std::string> const& parameter_pairs,
+    std::vector<std::string> const& extras,
     VideoReader::LogCallback log_callback,
     void* userdata
   ) :
@@ -183,6 +223,21 @@ struct VideoReaderFFmpeg::Impl {
     userdata{userdata},
     print_prefix{1}
   {
+    for (auto const& extra : extras) {
+      if (extra == "pkt_pos") {
+        this->pushers.emplace_back(&AVFrame::pkt_pos);
+      } else if (extra == "quality") {
+        this->pushers.emplace_back(&AVFrame::quality);
+      } else if (extra == "pts") {
+        this->pushers.emplace_back(&AVFrame::pts);
+      } else if (extra == "pkt_dts") {
+        this->pushers.emplace_back(&AVFrame::pkt_dts);
+      } else {
+        throw std::runtime_error(
+          "unknown extra: `" + extra + "`. Possible extras are: "
+          "'pkt_pos', 'quality', 'pts', 'pkt_dts'");
+      }
+    }
     AVDictionaryUP options = _create_dict_from_params_vec(parameter_pairs);
     this->format_context = _get_format_context(url, options, this);
     this->av_stream = _get_video_stream(format_context.get());
@@ -258,6 +313,87 @@ struct VideoReaderFFmpeg::Impl {
       }
     }
   }
+
+  VideoReader::FrameUP next_frame(bool decode) {
+    while (true) {
+      AVPacket* raw_packet = this->pop_packet();
+      if (reinterpret_cast<uintptr_t>(raw_packet) <= 1) {
+        if (raw_packet == nullptr) {
+          std::lock_guard<SpinLock> guard(this->read_queue_lock);
+          this->read_queue.emplace_back(
+              reinterpret_cast<AVPacket*>(uintptr_t{1}));
+          break;
+        }
+        throw std::runtime_error("second call on ended stream");
+      }
+      AVPacketUP local_packet(raw_packet);
+      int const send_ret = avcodec_send_packet(
+          this->codec_context.get(), local_packet.get());
+      if (send_ret != 0) {
+        // Let's guesstimate that one packet is one frame
+        this->current_frame++;
+        continue;
+      }
+      //while (true)
+      {
+        int const receive_ret = avcodec_receive_frame(
+            this->codec_context.get(), this->av_frame.get());
+        if (receive_ret == AVERROR(EAGAIN)) {
+          continue;
+        }
+        if (receive_ret != 0) {
+          throw std::runtime_error(
+              "avcodec_receive_frame failed " + get_av_error(receive_ret));
+        }
+        FrameUP ret(new Frame());
+        if (NewMinImagePrototype(
+                &ret->image,
+                this->codec_context->width,
+                this->codec_context->height,
+                3,
+                TYP_UINT8) != 0) {
+          throw std::runtime_error("NewMinImagePrototype failed");
+        }
+        if (!this->sws_context) {  // because broken videos are weird
+          this->sws_context = _create_converter(
+              (AVPixelFormat)this->av_frame->format,
+              this->codec_context->width,
+              this->codec_context->height);
+        }
+        if (decode) {
+          sws_scale(
+              this->sws_context.get(),
+              this->av_frame->data,
+              this->av_frame->linesize,
+              0,
+              this->av_frame->height,
+              &ret->image.p_zero_line,
+              &ret->image.stride);
+        }
+        if (!this->pushers.empty()) {
+          MallocStream stream{32};
+          thismsgpack::pack_array_header(this->pushers.size(), stream);
+          for (auto const& pusher : this->pushers) {
+            pusher(this->av_frame.get(), stream);
+          }
+          ret->extras = stream.data();
+          ret->extras_size = stream.size();
+        }
+        ret->number = this->current_frame++;
+        if (this->av_frame->pkt_dts != AV_NOPTS_VALUE) {
+          ret->timestamp_s = this->av_frame->best_effort_timestamp *
+                            av_q2d(this->format_context
+                                        ->streams[local_packet->stream_index]
+                                        ->time_base);
+        } else {
+          ret->timestamp_s = -1.0;
+        }
+        return ret;
+      }
+      //}
+    }  // while (true)
+    return {nullptr};
+  }
 };
 
 static void videoreader_ffmpeg_callback(void* avcl, int level, const char* fmt, va_list vl) {
@@ -325,6 +461,7 @@ static void videoreader_ffmpeg_callback(void* avcl, int level, const char* fmt, 
 VideoReaderFFmpeg::VideoReaderFFmpeg(
   std::string const& url,
   std::vector<std::string> const& parameter_pairs,
+  std::vector<std::string> const& extras,
   VideoReader::LogCallback log_callback,
   void* userdata)
 {
@@ -338,7 +475,7 @@ VideoReaderFFmpeg::VideoReaderFFmpeg(
   av_register_all();
 #endif
   this->impl = std::make_unique<VideoReaderFFmpeg::Impl>(
-    url, parameter_pairs, log_callback, userdata
+    url, parameter_pairs, extras, log_callback, userdata
   );
 }
 
@@ -372,73 +509,5 @@ VideoReaderFFmpeg::~VideoReaderFFmpeg() {
 }
 
 VideoReader::FrameUP VideoReaderFFmpeg::next_frame(bool decode) {
-  while (true) {
-    AVPacket* raw_packet = this->impl->pop_packet();
-    if (reinterpret_cast<uintptr_t>(raw_packet) <= 1) {
-      if (raw_packet == nullptr) {
-        std::lock_guard<SpinLock> guard(this->impl->read_queue_lock);
-        this->impl->read_queue.emplace_back(
-            reinterpret_cast<AVPacket*>(uintptr_t{1}));
-        break;
-      }
-      throw std::runtime_error("second call on ended stream");
-    }
-    AVPacketUP local_packet(raw_packet);
-    int const send_ret = avcodec_send_packet(
-        this->impl->codec_context.get(), local_packet.get());
-    if (send_ret != 0) {
-      // Let's guesstimate that one packet is one frame
-      this->impl->current_frame++;
-      continue;
-    }
-    //while (true)
-    {
-      int const receive_ret = avcodec_receive_frame(
-          this->impl->codec_context.get(), this->impl->av_frame.get());
-      if (receive_ret == AVERROR(EAGAIN)) {
-        continue;
-      }
-      if (receive_ret != 0) {
-        throw std::runtime_error(
-            "avcodec_receive_frame failed " + get_av_error(receive_ret));
-      }
-      FrameUP ret(new Frame());
-      if (NewMinImagePrototype(
-              &ret->image,
-              this->impl->codec_context->width,
-              this->impl->codec_context->height,
-              3,
-              TYP_UINT8) != 0) {
-        throw std::runtime_error("NewMinImagePrototype failed");
-      }
-      if (!this->impl->sws_context) {  // because broken videos are weird
-        this->impl->sws_context = _create_converter(
-            (AVPixelFormat)this->impl->av_frame->format,
-            this->impl->codec_context->width,
-            this->impl->codec_context->height);
-      }
-      if (decode) {
-        sws_scale(
-            this->impl->sws_context.get(),
-            this->impl->av_frame->data,
-            this->impl->av_frame->linesize,
-            0,
-            this->impl->av_frame->height,
-            &ret->image.p_zero_line,
-            &ret->image.stride);
-      }
-      ret->number = this->impl->current_frame++;
-      if (this->impl->av_frame->pkt_dts != AV_NOPTS_VALUE) {
-        ret->timestamp_s = this->impl->av_frame->best_effort_timestamp *
-                           av_q2d(this->impl->format_context
-                                      ->streams[local_packet->stream_index]
-                                      ->time_base);
-      } else {
-        ret->timestamp_s = -1.0;
-      }
-      return ret;
-    }
-    //}
-  }  // while (true)
-  return {nullptr};
+  return this->impl->next_frame(decode);
 }

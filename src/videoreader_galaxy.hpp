@@ -6,12 +6,14 @@ class VideoReaderGalaxy : public VideoReader
 public:
   VideoReaderGalaxy(
     std::string const& url,
-    std::vector<std::string> const& parameter_pairs
+    std::vector<std::string> const& parameter_pairs,
+    std::vector<std::string> const& extras
   );
 
   bool is_seekable() const override;
   VideoReader::FrameUP next_frame(bool decode) override;
   VideoReader::Frame::number_t size() const override;
+  void set(std::vector<std::string> const& parameter_pairs) override;
 
 private:
   struct Impl;
