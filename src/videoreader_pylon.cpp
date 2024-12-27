@@ -16,7 +16,6 @@
 #include <thread>
 #include <deque>
 #include <mutex>
-#include <minimgapi/minimgapi.h>
 #include "spinlock.hpp"
 
 
@@ -27,8 +26,19 @@ struct VideoReaderPylon::Impl {
   SpinLock read_queue_lock;
   Pylon::CImageFormatConverter converter;
   std::thread thread;
+  AllocateCallback allocate_callback;
+  DeallocateCallback deallocate_callback;
+  void* userdata;
 
-  Impl() : stop_requested{false}
+  Impl(
+    AllocateCallback allocate_callback,
+    DeallocateCallback deallocate_callback,
+    void* userdata
+  ) :
+    stop_requested{false},
+    allocate_callback{allocate_callback},
+    deallocate_callback{deallocate_callback},
+    userdata{userdata}
   {
     this->converter.OutputPixelFormat = Pylon::PixelType_RGB8packed;
     this->converter.OutputBitAlignment = Pylon::OutputBitAlignment_MsbAligned;
@@ -90,13 +100,58 @@ struct VideoReaderPylon::Impl {
     this->camera.DestroyDevice();
   }
 
+  VideoReader::FrameUP next_frame(bool decode) {
+    Pylon::CGrabResultPtr result = this->pop_grab_result();
+    if (!result.IsValid()) {
+      return nullptr;
+    }
+    int32_t const width = static_cast<int32_t>(result->GetWidth());
+    int32_t const height = static_cast<int32_t>(result->GetHeight());
+    int32_t alignment = 16;
+    int32_t const preferred_stride = (width * 3 + alignment - 1) & ~(alignment - 1);
+
+    Frame::number_t const number = result->GetBlockID();
+    Frame::timestamp_s_t const timestamp_s = result->GetTimeStamp() / 1000.0;
+
+    FrameUP frame(new Frame(
+      this->deallocate_callback, this->userdata, {
+        height, // height
+        width,  // width
+        3,  // channels
+        SCALAR_TYPE::U8,  // scalar_type;
+        preferred_stride,  // stride
+        nullptr,  // data
+        nullptr  // user_data
+      },
+      number, timestamp_s
+    ));
+    if (decode) {
+      VideoReader::VRImage *img = &frame->image;
+      (*this->allocate_callback)(img, this->userdata);
+      if (!img->data) {
+        throw std::runtime_error("Failed to allocate image for pylon");
+      }
+      this->converter.Convert(img->data, img->stride * img->height, result);
+    }
+    return frame;
+  }
+
 };
 
 VideoReaderPylon::VideoReaderPylon(
   std::string const& url,
-  std::vector<std::string> const& parameter_pairs) {
+  std::vector<std::string> const& parameter_pairs,
+  std::vector<std::string> const& extras,
+  AllocateCallback allocate_cb,
+  DeallocateCallback deallocate_cb,
+  VideoReader::LogCallback log_callback,
+  void* userdata
+  ) {
+  if (!extras.empty()) {
+    throw std::runtime_error("extras not supported in pylon (yet)");
+  }
   Pylon::PylonInitialize();
-  this->impl = std::unique_ptr<Impl>(new Impl{});
+  this->impl = std::unique_ptr<Impl>(new Impl{allocate_cb, deallocate_cb, userdata});
 }
 
 bool VideoReaderPylon::is_seekable() const {
@@ -104,19 +159,7 @@ bool VideoReaderPylon::is_seekable() const {
 }
 
 VideoReader::FrameUP VideoReaderPylon::next_frame(bool decode) {
-  Pylon::CGrabResultPtr result = this->impl->pop_grab_result();
-  if (!result.IsValid())
-    return VideoReader::FrameUP();
-  FrameUP ret(new Frame());
-  MinImg &img = ret->image;
-  NewMinImagePrototype(&img, result->GetWidth(), result->GetHeight(), 3, TYP_UINT8, 0, AO_EMPTY);
-  AllocMinImage(&img, 1);
-  if (decode) {
-    this->impl->converter.Convert(img.p_zero_line, img.stride * img.height, result);
-  }
-  ret->number = result->GetBlockID();
-  ret->timestamp_s = result->GetTimeStamp() / 1000.0;
-  return ret;
+  return this->impl->next_frame(decode);
 }
 
 VideoReader::Frame::number_t VideoReaderPylon::size() const

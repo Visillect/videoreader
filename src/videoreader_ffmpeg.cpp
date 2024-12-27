@@ -15,7 +15,6 @@ extern "C" {
 }
 #include <atomic>
 #include <deque>
-#include <minimgapi/minimgapi.h>
 #include <mutex>
 #include <thread>
 #include <vector>
@@ -206,21 +205,27 @@ struct VideoReaderFFmpeg::Impl {
   SpinLock read_queue_lock;
   AVPacket* pop_packet();
 
-  VideoReader::LogCallback log_callback;
-  void* userdata;
   int print_prefix;
   std::vector<AVFramePusher> pushers;
+  AllocateCallback allocate_callback;
+  DeallocateCallback deallocate_callback;
+  VideoReader::LogCallback log_callback;
+  void* userdata;
 
   Impl(
     std::string const& url,
     std::vector<std::string> const& parameter_pairs,
     std::vector<std::string> const& extras,
+    AllocateCallback allocate_callback,
+    DeallocateCallback deallocate_callback,
     VideoReader::LogCallback log_callback,
     void* userdata
   ) :
     stop_requested(false),
-    log_callback{log_callback},
+    allocate_callback{allocate_callback},
+    deallocate_callback{deallocate_callback},
     userdata{userdata},
+    log_callback{log_callback},
     print_prefix{1}
   {
     for (auto const& extra : extras) {
@@ -345,14 +350,31 @@ struct VideoReaderFFmpeg::Impl {
           throw std::runtime_error(
               "avcodec_receive_frame failed " + get_av_error(receive_ret));
         }
-        FrameUP ret(new Frame());
-        if (NewMinImagePrototype(
-                &ret->image,
-                this->codec_context->width,
-                this->codec_context->height,
-                3,
-                TYP_UINT8) != 0) {
-          throw std::runtime_error("NewMinImagePrototype failed");
+        int32_t alignment = 16;
+        int32_t const preferred_stride = (this->codec_context->width * 3 + alignment - 1) & ~(alignment - 1);
+
+        Frame::timestamp_s_t timestamp_s = -1.0;
+        if (this->av_frame->pkt_dts != AV_NOPTS_VALUE) {
+          timestamp_s = this->av_frame->best_effort_timestamp *
+            av_q2d(this->format_context
+                   ->streams[local_packet->stream_index]->time_base);
+        }
+        Frame::number_t const number = this->current_frame++;
+
+        FrameUP ret(new Frame(this->deallocate_callback, this->userdata, {
+          this->codec_context->height,  // height
+          this->codec_context->width,  // width
+          3,  // channels
+          SCALAR_TYPE::U8, // scalar_type
+          preferred_stride,  // stride
+          nullptr,  // data
+          nullptr,  // user_data
+        }, number, timestamp_s));
+        VRImage *image = &ret->image;
+
+        (*this->allocate_callback)(image, this->userdata);
+        if (!image->data) {
+          throw std::runtime_error("allocation callback failed: data is nullptr");
         }
         if (!this->sws_context) {  // because broken videos are weird
           this->sws_context = _create_converter(
@@ -367,8 +389,8 @@ struct VideoReaderFFmpeg::Impl {
               this->av_frame->linesize,
               0,
               this->av_frame->height,
-              &ret->image.p_zero_line,
-              &ret->image.stride);
+              &image->data,
+              &image->stride);
         }
         if (!this->pushers.empty()) {
           MallocStream stream{32};
@@ -378,15 +400,6 @@ struct VideoReaderFFmpeg::Impl {
           }
           ret->extras = stream.data();
           ret->extras_size = stream.size();
-        }
-        ret->number = this->current_frame++;
-        if (this->av_frame->pkt_dts != AV_NOPTS_VALUE) {
-          ret->timestamp_s = this->av_frame->best_effort_timestamp *
-                            av_q2d(this->format_context
-                                        ->streams[local_packet->stream_index]
-                                        ->time_base);
-        } else {
-          ret->timestamp_s = -1.0;
         }
         return ret;
       }
@@ -462,7 +475,9 @@ VideoReaderFFmpeg::VideoReaderFFmpeg(
   std::string const& url,
   std::vector<std::string> const& parameter_pairs,
   std::vector<std::string> const& extras,
-  VideoReader::LogCallback log_callback,
+  AllocateCallback allocate_callback,
+  DeallocateCallback deallocate_callback,
+  LogCallback log_callback,
   void* userdata)
 {
   avformat_network_init();
@@ -475,7 +490,7 @@ VideoReaderFFmpeg::VideoReaderFFmpeg(
   av_register_all();
 #endif
   this->impl = std::make_unique<VideoReaderFFmpeg::Impl>(
-    url, parameter_pairs, extras, log_callback, userdata
+    url, parameter_pairs, extras, allocate_callback, deallocate_callback, log_callback, userdata
   );
 }
 

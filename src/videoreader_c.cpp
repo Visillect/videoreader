@@ -4,6 +4,20 @@
 
 #define API extern "C"
 typedef void (*videoreader_log)(char const*, int, void*);
+typedef void (*videoreader_allocate)(char const*);
+
+typedef struct {
+  int32_t height;
+  int32_t width;
+  int32_t channels;
+  int32_t scalar_type;
+  int32_t stride;  // 0 when unknown. number of bytes between rows
+  uint8_t *data;  // pointer to the first pixel
+  void *user_data;  // user supplied data, useful for freeing in DeallocateCallback
+} VRImage;
+
+
+static_assert(sizeof(VRImage) == sizeof(VideoReader::VRImage), "error");
 
 static std::string videoreader_what_str;
 
@@ -18,6 +32,8 @@ API int videoreader_create(
     int argc,
     char const* extras[],
     int extrasc,
+    videoreader_allocate alloc_callback,
+    videoreader_allocate free_callback,
     videoreader_log callback,
     void* userdata) {
   try {
@@ -33,6 +49,8 @@ API int videoreader_create(
         video_path,
         std::move(parameter_pairs),
         std::move(extras_vec),
+        reinterpret_cast<VideoReader::AllocateCallback>(alloc_callback),
+        reinterpret_cast<VideoReader::DeallocateCallback>(free_callback),
         reinterpret_cast<VideoReader::LogCallback>(callback),
         userdata);
     *reader = reinterpret_cast<struct videoreader*>(video_reader.release());
@@ -68,7 +86,7 @@ API void videoreader_delete(struct videoreader* reader) {
 
 API int videoreader_next_frame(
     struct videoreader* reader,
-    MinImg* dst_img,
+    VRImage* dst_img,
     uint64_t* number,
     double* timestamp_s,
     unsigned const char* extras[],
@@ -80,12 +98,19 @@ API int videoreader_next_frame(
     if (!frame)
       return 1;
 
-    *dst_img = frame->image;
+    auto const& image = frame->image;
+    dst_img->height = image.height;
+    dst_img->width = image.width;
+    dst_img->channels = image.channels;
+    dst_img->scalar_type = static_cast<int32_t>(image.scalar_type);
+    dst_img->stride = image.stride;
+    dst_img->data = image.data;
+    dst_img->user_data = image.user_data;
+
     *number = frame->number;
     *timestamp_s = frame->timestamp_s;
     *extras = frame->extras;
     *extras_size = frame->extras_size;
-    frame->image.is_owner = false;
     frame->extras = nullptr;
   } catch (std::exception& e) {
     videoreader_what_str = e.what();
@@ -102,11 +127,11 @@ API int videoreader_size(struct videoreader* reader, uint64_t* count) {
 API int videowriter_create(
     struct videowriter** writer,
     char const* video_path,
-    struct MinImg const* frame_format,
+    VRImage const* frame_format,
     char const* argv[],
     int argc,
     bool realtime,
-    videoreader_log callback,
+    videoreader_log log_callback,
     void* userdata
 ) {
   try {
@@ -116,10 +141,10 @@ API int videowriter_create(
     }
     *writer = reinterpret_cast<struct videowriter*>(new VideoWriter(
         video_path,
-        *frame_format,
+        *reinterpret_cast<VideoReader::VRImage const*>(frame_format),
         std::move(parameter_pairs),
         realtime,
-        reinterpret_cast<VideoReader::LogCallback>(callback),
+        reinterpret_cast<VideoReader::LogCallback>(log_callback),
         userdata));
   } catch (std::exception& e) {
     videoreader_what_str = e.what();
@@ -134,10 +159,10 @@ API void videowriter_delete(struct videowriter* reader) {
 
 API int videowriter_push(
   struct videowriter* writer,
-  struct MinImg const* img,
+  VRImage const* img,
   double timestamp_s) {
   try {
-    VideoReader::Frame frame{*img, 0, timestamp_s};
+    VideoReader::Frame frame{0, nullptr, *reinterpret_cast<VideoReader::VRImage const*>(img), 0, timestamp_s};
     bool const successful_push = reinterpret_cast<VideoWriter*>(
       writer)->push(frame);
     return successful_push ? 0 : 1;

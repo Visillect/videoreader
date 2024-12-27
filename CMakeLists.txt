@@ -1,3 +1,4 @@
+cmake_minimum_required(VERSION 3.17)
 project(videoreader)
 
 add_library(videoreader
@@ -11,16 +12,11 @@ add_library(videowriter
 
 macro(videoreader_setup target)
   set_property(TARGET ${target} PROPERTY CXX_STANDARD 17)
-  target_link_libraries(${target}
-  PUBLIC
-    minbase
-  PRIVATE
-    minimgapi
-  )
   target_include_directories(${target} PUBLIC include)
   if (UNIX)
     target_link_libraries(${target} PRIVATE pthread)
   endif()
+  set_property(TARGET ${target} PROPERTY POSITION_INDEPENDENT_CODE ON)
 endmacro()
 
 videoreader_setup(videoreader)

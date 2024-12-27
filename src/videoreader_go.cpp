@@ -5,6 +5,7 @@
 #include <chrono>
 #include <numeric>
 #include <iomanip>
+#include <algorithm>
 #ifdef USE_MINVIEWER_CLIENT
 #include <minviewer/client.hpp>
 #endif
@@ -23,15 +24,20 @@ BOOL WINAPI consoleHandler(DWORD signal) {
 
 #endif
 
+static void log_callback(char const* message, VideoReader::LogLevel log_level, void* userdata) {
+  std::cout << "[vr]" << message << '\n';
+}
+
 static void run(std::string const& url,
-                std::vector<std::string> const& parameter_pairs ) {
+                std::vector<std::string> const& parameter_pairs,
+                std::vector<std::string> const& extras) {
 #ifdef _WIN32
   if (!SetConsoleCtrlHandler(consoleHandler, TRUE)) {
     throw std::runtime_error("ERROR: Could not set control handler");
   }
 #endif
 
-  auto video_reader = VideoReader::create(url, parameter_pairs);
+  auto video_reader = VideoReader::create(url, parameter_pairs, extras, nullptr, nullptr, log_callback);
   uint64_t const frames_count = video_reader->size();
   std::cout << "frames_count: " << frames_count << std::endl
             << std::boolalpha << "is_seekaable: " << video_reader->is_seekable() << std::endl;
@@ -88,14 +94,20 @@ static void run(std::string const& url,
 
 int main(int argc, char **argv) {
   if (argc < 2) {
-    std::cout << "usage:" << argv[0] << " URL [PARAMETER VALUE] ...\n";
+    std::cout << "usage:" << argv[0]
+              << " URL [PARAMETER VALUE] ... [--extras [EXTRAS]]\n";
     return 1;
   }
   try {
-    run(
-      std::string(argv[1]),
-      std::vector<std::string>(argv + 2, argv + argc)
-    );
+    std::string const uri = std::string(argv[1]);
+    std::vector<std::string> parameter_pairs(argv + 2, argv + argc);
+    std::vector<std::string> extras{};
+    auto extras_it = std::find(parameter_pairs.begin(), parameter_pairs.end(), "--extras");
+    if (extras_it != parameter_pairs.end()) { // have extras
+      std::move(extras_it + 1, parameter_pairs.end(), std::back_inserter(extras));
+      parameter_pairs.pop_back();  // remove --extras
+    }
+    run(uri, parameter_pairs, extras);
   }
   catch (std::runtime_error &e) {
     std::cerr << "EXCEPTION: " << e.what() << std::endl;

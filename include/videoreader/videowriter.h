@@ -14,7 +14,7 @@ public:
   // userdata: data for log_callback (currently unused)
   VideoWriter(
     std::string const& uri,
-    MinImg const& format,
+    VideoReader::VRImage const& format,
     std::vector<std::string> const& parameter_pairs = {}, // size % 2 == 0
     bool realtime = false,
     VideoReader::LogCallback log_callback = nullptr,

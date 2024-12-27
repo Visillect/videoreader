@@ -1,0 +1,8 @@
+*.pyc
+/build*/
+# `kernprof` output
+*.lprof
+# temporary file for `line_profiler`
+benchmark.py
+# compiled output
+_videoreader.py
