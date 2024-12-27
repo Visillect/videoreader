@@ -41,7 +41,7 @@ struct VideoWriter::Impl {
 
   SwsContextUP sws_ctx;
   AVFormatContextUP oc;
-  MinImg m_frameTemplate;
+  VideoReader::VRImage m_frameTemplate;
 
   const bool realtime;
   std::thread write_thread;
@@ -114,7 +114,7 @@ struct VideoWriter::Impl {
   }
 
   bool push(VideoReader::Frame const& frame) {
-    MinImg const& img = frame.image;
+    VideoReader::VRImage const& img = frame.image;
     if (
       this->frame->width != img.width ||
       this->frame->height != img.height
@@ -123,7 +123,7 @@ struct VideoWriter::Impl {
     }
     if (const int ret = sws_scale(
       this->sws_ctx.get(),
-      &img.p_zero_line, &img.stride, 0, img.height,
+      &img.data, &img.stride, 0, img.height,
       this->frame->data,
       this->frame->linesize); ret < 0) {
       throw std::runtime_error(format_error(ret, "sws_scale() failed"));
@@ -191,7 +191,7 @@ static int64_t pop_value_int64(
 
 VideoWriter::VideoWriter(
   std::string const& uri,
-  MinImg const& format,
+  VideoReader::VRImage const& format,
   std::vector<std::string> const& parameter_pairs,  // size % 2 == 0
   bool realtime,
   VideoReader::LogCallback log_callback,

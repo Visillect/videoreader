@@ -4,7 +4,6 @@
 #include <mutex>
 #include <cstring>
 #include <stdexcept>  // std::runtime_error
-#include <minimgapi/minimgapi.h>
 #include <GxIAPI.h>
 #include "videoreader_galaxy.hpp"
 #include "spinlock.hpp"
@@ -29,7 +28,7 @@ static std::string get_error_string(GX_STATUS emErrorStatus) {
 }
 
 static std::string to_lower(std::string s) {
-    std::transform(s.begin(), s.end(), s.begin(), (int(*)(int)) std::tolower );
+    std::transform(s.begin(), s.end(), s.begin(), (int(*)(int)) std::tolower);
     return s;
 }
 
@@ -347,50 +346,6 @@ struct DoublePusher {
   }
 };
 
-
-static void set_pair(
-  GX_DEV_HANDLE handle,
-  std::string const& key,
-  std::string const& value
-) {
-  if (auto pair = INT_FEATURES.find(key); pair != INT_FEATURES.end()) {
-    int64_t int_value = std::stoll(value);
-    GALAXY_CHECK(GXSetInt(handle, pair->second, int_value));
-  }
-  if (auto pair = FLOAT_FEATURES.find(key); pair != FLOAT_FEATURES.end()) {
-    double float_value = std::stod(value);
-    GALAXY_CHECK(GXSetFloat(handle, pair->second, float_value));
-  }
-  if (auto pair = ENUM_FEATURES.find(key); pair != ENUM_FEATURES.end()) {
-    uint32_t nums = 0;
-    GALAXY_CHECK(GXGetEnumEntryNums(handle, pair->second, &nums));
-    size_t nBufferSize = nums * sizeof(GX_ENUM_DESCRIPTION);
-    auto const pEnumDescription = std::unique_ptr<GX_ENUM_DESCRIPTION[]>(new GX_ENUM_DESCRIPTION[nums]);
-    GALAXY_CHECK(GXGetEnumDescription(handle, pair->second, pEnumDescription.get(), &nBufferSize));
-    uint32_t entry_idx = 0;
-    for (; entry_idx < nums; ++entry_idx) {
-      auto const& item = pEnumDescription.get()[entry_idx];
-      if (item.szSymbolic == value) {
-        GALAXY_CHECK(GXSetEnum(handle, pair->second, item.nValue));
-        break;
-      }
-    }
-    if (entry_idx == nums) {
-      std::string valid_values;
-      for (entry_idx = 0; entry_idx < nums; ++entry_idx) {
-        if (entry_idx) {
-          valid_values += ", ";
-        }
-        valid_values += "`" + std::string(pEnumDescription.get()[entry_idx].szSymbolic) + "`";
-      }
-      throw std::runtime_error(
-        "Failed to set `" + key + "` to `" + value + "`. Valid values are: " + valid_values + "."
-      );
-    }
-  }
-}
-
-
 struct VideoReaderGalaxy::Impl {
   GX_DEV_HANDLE handle;
   std::deque<FrameUP> read_queue;
@@ -400,13 +355,26 @@ struct VideoReaderGalaxy::Impl {
   std::exception_ptr exception;
   std::vector<DoublePusher> pushers;
   double timestamp_tick_frequency;
+  AllocateCallback allocate_callback;
+  DeallocateCallback deallocate_callback;
+  VideoReader::LogCallback log_callback;
+  void* userdata;
 
   Impl(
     GX_DEV_HANDLE handle,
     std::vector<std::string> const& parameter_pairs,
-    std::vector<std::string> const& extras
+    std::vector<std::string> const& extras,
+    AllocateCallback allocate_callback,
+    DeallocateCallback deallocate_callback,
+    VideoReader::LogCallback log_callback,
+    void* userdata
   ) :
-  handle{handle}, stop_requested{false} {
+  handle{handle},
+  stop_requested{false},
+  allocate_callback{allocate_callback},
+  deallocate_callback{deallocate_callback},
+  log_callback{log_callback},
+  userdata{userdata} {
     for (const std::string& extra : extras) {
       if (extra == "exposure") {
         this->pushers.push_back(DoublePusher(GX_FLOAT_EXPOSURE_TIME));
@@ -442,6 +410,70 @@ struct VideoReaderGalaxy::Impl {
   ~Impl() {
     GXCloseDevice(this->handle);
   }
+
+  void set_pair(
+    GX_DEV_HANDLE handle,
+    std::string const& key,
+    std::string const& value
+  ) {
+    if (auto pair = INT_FEATURES.find(key); pair != INT_FEATURES.end()) {
+      int64_t int_value = std::stoll(value);
+      GALAXY_CHECK(GXSetInt(handle, pair->second, int_value));
+    }
+    else if (auto pair = FLOAT_FEATURES.find(key); pair != FLOAT_FEATURES.end()) {
+      double float_value = std::stod(value);
+      GALAXY_CHECK(GXSetFloat(handle, pair->second, float_value));
+    }
+    else if (auto pair = ENUM_FEATURES.find(key); pair != ENUM_FEATURES.end()) {
+      uint32_t nums = 0;
+      GALAXY_CHECK(GXGetEnumEntryNums(handle, pair->second, &nums));
+      size_t nBufferSize = nums * sizeof(GX_ENUM_DESCRIPTION);
+      auto const pEnumDescription = std::unique_ptr<GX_ENUM_DESCRIPTION[]>(new GX_ENUM_DESCRIPTION[nums]);
+      GALAXY_CHECK(GXGetEnumDescription(handle, pair->second, pEnumDescription.get(), &nBufferSize));
+      uint32_t entry_idx = 0;
+      for (; entry_idx < nums; ++entry_idx) {
+        auto const& item = pEnumDescription.get()[entry_idx];
+        if (item.szSymbolic == value) {
+          GALAXY_CHECK(GXSetEnum(handle, pair->second, item.nValue));
+          break;
+        }
+      }
+      if (entry_idx == nums) {
+        std::string valid_values;
+        for (entry_idx = 0; entry_idx < nums; ++entry_idx) {
+          if (entry_idx) {
+            valid_values += ", ";
+          }
+          valid_values += "`" + std::string(pEnumDescription.get()[entry_idx].szSymbolic) + "`";
+        }
+        throw std::runtime_error(
+          "Failed to set `" + key + "` to `" + value + "`. Valid values are: " + valid_values + "."
+        );
+      }
+    } else {
+      if (this->log_callback) {
+        std::string warning{"unknown key `" + key + "`. Available keys: "};
+        warning.reserve(4096);
+        for (auto const& it: INT_FEATURES) {
+          warning.append(it.first);
+          warning.append(", ", 2);
+        }
+        for (auto const& it: FLOAT_FEATURES) {
+          warning.append(it.first);
+          warning.append(", ", 2);
+        }
+        for (auto const& it: ENUM_FEATURES) {
+          warning.append(it.first);
+          warning.append(", ", 2);
+        }
+        warning.resize(warning.size() - 2);  // remove last comma
+
+        this->log_callback(
+          warning.c_str(), VideoReader::LogLevel::WARNING, this->userdata);
+      }
+    }
+  }
+
   void read() {
     // https://github.com/JerryAuas/RmEverTo2022/blob/6ca1c2f6d94934d8a1296f3ad45b9cc327b7fa9b/Sources/armordetect1.cpp#L205
     try {
@@ -450,10 +482,14 @@ struct VideoReaderGalaxy::Impl {
       PGX_FRAME_BUFFER pFrameBuffer[5]{};
       uint32_t nFrameCount{};
       uint32_t timeoutHit{};
-      uint64_t addFrames{};  // trying to make nFrameID continious
-      uint64_t previousFrameID{};  // trying to make nFrameID continious
+      uint64_t addFrames{};  // trying to make nFrameID contigious
+      uint64_t previousFrameID{};  // trying to make nFrameID contigious
       while (!this->stop_requested) {
-        auto const status = GXDQAllBufs(this->handle, pFrameBuffer, sizeof(pFrameBuffer) / sizeof(*pFrameBuffer), &nFrameCount, TIMEOUT_MS);
+        auto const status = GXDQAllBufs(
+          this->handle, pFrameBuffer,
+          sizeof(pFrameBuffer) / sizeof(*pFrameBuffer),
+          &nFrameCount, TIMEOUT_MS
+        );
         if (status != GX_STATUS_SUCCESS) {
           if (status == GX_STATUS_TIMEOUT) {
             ++timeoutHit;
@@ -463,7 +499,7 @@ struct VideoReaderGalaxy::Impl {
             continue;
           }
           else {
-            throw std::runtime_error(get_error_string(status).c_str());
+            throw std::runtime_error(get_error_string(status));
           }
         }
         timeoutHit = 0;
@@ -472,7 +508,42 @@ struct VideoReaderGalaxy::Impl {
           continue;
         }
         for (uint32_t idx = 0; idx < nFrameCount; ++idx) {
-          FrameUP frame{new Frame()};
+          PGX_FRAME_BUFFER buffer = pFrameBuffer[idx];
+          if (buffer->nStatus != GX_FRAME_STATUS_SUCCESS) {
+            if (this->log_callback) {
+              std::string const last_error = get_error_string(GX_STATUS_SUCCESS);
+              this->log_callback(
+                ("buffer status is " + std::to_string(buffer->nStatus) + ": " + last_error).c_str(),
+                VideoReader::LogLevel::WARNING, this->userdata
+              );
+            }
+            continue;
+          }
+
+          int32_t const alignment = 16;
+          int32_t const preferred_stride = (buffer->nWidth * 1 + alignment - 1) & ~(alignment - 1);
+
+          Frame::timestamp_s_t const timestamp_s = (
+            static_cast<double>(buffer->nTimestamp) /
+            this->timestamp_tick_frequency);  // bad nTimestamp cast, sorry
+
+          uint64_t const frame_id = buffer->nFrameID - 1; // -1 as Galaxy starts with 1
+          if (frame_id < previousFrameID) {
+            addFrames += (previousFrameID - frame_id) + 1;
+          }
+          Frame::number_t const number = frame_id + addFrames;
+          previousFrameID = frame_id;
+
+          FrameUP frame(new Frame(this->deallocate_callback, this->userdata, {
+            buffer->nHeight,  // height
+            buffer->nWidth,  // width
+            1,  // channels
+            SCALAR_TYPE::U8, // scalar_type
+            preferred_stride,  // stride
+            nullptr,  // data
+            nullptr,  // user_data
+          }, number, timestamp_s));
+
           if (!this->pushers.empty()) {
             MallocStream stream{32};
             thismsgpack::pack_array_header(this->pushers.size(), stream);
@@ -482,31 +553,13 @@ struct VideoReaderGalaxy::Impl {
             frame->extras = stream.data();
             frame->extras_size = stream.size();
           }
-          PGX_FRAME_BUFFER buffer = pFrameBuffer[idx];
-          uint64_t const frame_id = buffer->nFrameID - 1; // -1 as Galaxy starts with 1
-          if (frame_id < previousFrameID) {
-            addFrames += (previousFrameID - frame_id) + 1;
-          }
-          frame->number = frame_id + addFrames;
-          frame->timestamp_s = (
-            static_cast<double>(buffer->nTimestamp) /
-            this->timestamp_tick_frequency);  // bad nTimestamp cast, sorry
-          previousFrameID = frame_id;
-          MinImg &img = frame->image;
-          if (NewMinImagePrototype(&img, buffer->nWidth, buffer->nHeight, 1, TYP_UINT8, 0, AO_EMPTY) != 0) {
-            throw std::runtime_error("NewMinImagePrototype err");
-          }
-          if (AllocMinImage(&img, 4) != 0) {
-            throw std::runtime_error("AllocMinImage err");
-          }
-          std::memcpy(img.p_zero_line, buffer->pImgBuf, buffer->nWidth * buffer->nHeight);
+
+          auto const& img = frame->image;
+          std::memcpy(img.data, buffer->pImgBuf, buffer->nWidth * buffer->nHeight);
           {
             std::lock_guard<SpinLock> guard(this->read_queue_lock);
-            if (this->read_queue.size() > 10)
-            {
-              // cleanup queue
-              for (int i = 0; i < 8; ++i)
-                this->read_queue.pop_front();
+            if (this->read_queue.size() > 9) {
+              remove_every_second_item(this->read_queue);
             }
             this->read_queue.emplace_back(std::move(frame));
           }
@@ -548,7 +601,12 @@ struct VideoReaderGalaxy::Impl {
 VideoReaderGalaxy::VideoReaderGalaxy(
   std::string const& url,
   std::vector<std::string> const& parameter_pairs,
-  std::vector<std::string> const& extras) {
+  std::vector<std::string> const& extras,
+  AllocateCallback allocate_callback,
+  DeallocateCallback deallocate_callback,
+  LogCallback log_callback,
+  void* userdata
+) {
 
   auto const res = GXInitLib();
   if (res != GX_STATUS_SUCCESS) {
@@ -566,13 +624,13 @@ VideoReaderGalaxy::VideoReaderGalaxy(
       GX_OPEN_USERID
   };
 
-
   GX_OPEN_PARAM param{const_cast<char*>(info.c_str()), GX_OPEN_SN, GX_ACCESS_EXCLUSIVE};
   for (int mode_idx = 0; mode_idx < sizeof(modes) / sizeof(*modes); ++mode_idx) {
     param.openMode = modes[mode_idx];
     auto const ret = GXOpenDevice(&param, &handle);
     if (ret == GX_STATUS_SUCCESS) {
-      this->impl = std::make_unique<Impl>(handle, parameter_pairs, extras);
+      this->impl = std::make_unique<Impl>(
+        handle, parameter_pairs, extras, allocate_callback, deallocate_callback, log_callback, userdata);
       return;
     }
   }
@@ -600,6 +658,8 @@ void VideoReaderGalaxy::set(std::vector<std::string> const& parameter_pairs) {
 
 VideoReaderGalaxy::~VideoReaderGalaxy() {
   this->impl->stop_requested = true;
-  this->impl->thread.join();
+  if (this->impl->thread.joinable()) {
+    this->impl->thread.join();
+  }
   GXCloseLib();
 }
