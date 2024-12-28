@@ -43,7 +43,7 @@ public:
     DeallocateCallback free;
     void *userdata;
     VRImage image;
-    ~Frame();  // Frees MinImg and extras
+    ~Frame();  // Frees VRImage and extras
   };
 
   enum class LogLevel : int {  // int so the interface can be used from `C`
