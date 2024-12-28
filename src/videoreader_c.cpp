@@ -112,6 +112,7 @@ API int videoreader_next_frame(
     *extras = frame->extras;
     *extras_size = frame->extras_size;
     frame->extras = nullptr;
+    frame->free = nullptr;
   } catch (std::exception& e) {
     videoreader_what_str = e.what();
     return -1;

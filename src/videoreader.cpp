@@ -77,7 +77,9 @@ void VideoReader::set(
 
 VideoReader::Frame::~Frame()
 {
-  (*this->free)(&this->image, this->userdata);
+  if (this->free) {  // check that the frame wasn't moved
+    (*this->free)(&this->image, this->userdata);
+  }
   ::free(const_cast<unsigned char*>(this->extras));
   this->extras = nullptr;
   this->extras_size = 0;
