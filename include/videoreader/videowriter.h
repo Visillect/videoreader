@@ -1,8 +1,7 @@
 #pragma once
 #include "videoreader.h"
 
-class VideoWriter
-{
+class VideoWriter {
 public:
   struct Impl;
 
@@ -13,18 +12,18 @@ public:
   // log_callback: log callback (currently unused)
   // userdata: data for log_callback (currently unused)
   VideoWriter(
-    std::string const& uri,
-    VideoReader::VRImage const& format,
-    std::vector<std::string> const& parameter_pairs = {}, // size % 2 == 0
-    bool realtime = false,
-    VideoReader::LogCallback log_callback = nullptr,
-    void* userdata = nullptr
-  );
+      std::string const& uri,
+      VideoReader::VRImage const& format,
+      std::vector<std::string> const& parameter_pairs = {},  // size % 2 == 0
+      bool realtime = false,
+      VideoReader::LogCallback log_callback = nullptr,
+      void* userdata = nullptr);
   VideoWriter& operator=(VideoWriter const&) = delete;
   bool push(VideoReader::Frame const&);
   void close();
 
   ~VideoWriter();
+
 protected:
-    std::unique_ptr<Impl> impl;
+  std::unique_ptr<Impl> impl;
 };

@@ -2,22 +2,21 @@
 
 #if defined(_DEBUG)
 #undef _DEBUG
-#  include <pylon/TlFactory.h>
-#  include <pylon/gige/BaslerGigECamera.h>
-#  include <pylon/PylonIncludes.h>
-#  include <pylon/ImageFormatConverter.h>
+#include <pylon/ImageFormatConverter.h>
+#include <pylon/PylonIncludes.h>
+#include <pylon/TlFactory.h>
+#include <pylon/gige/BaslerGigECamera.h>
 #define _DEBUG 1
 #else
-#  include <pylon/TlFactory.h>
-#  include <pylon/gige/BaslerGigECamera.h>
-#  include <pylon/PylonIncludes.h>
-#  include <pylon/ImageFormatConverter.h>
+#include <pylon/ImageFormatConverter.h>
+#include <pylon/PylonIncludes.h>
+#include <pylon/TlFactory.h>
+#include <pylon/gige/BaslerGigECamera.h>
 #endif
-#include <thread>
+#include "spinlock.hpp"
 #include <deque>
 #include <mutex>
-#include "spinlock.hpp"
-
+#include <thread>
 
 struct VideoReaderPylon::Impl {
   Pylon::CInstantCamera camera;
@@ -31,23 +30,19 @@ struct VideoReaderPylon::Impl {
   void* userdata;
 
   Impl(
-    AllocateCallback allocate_callback,
-    DeallocateCallback deallocate_callback,
-    void* userdata
-  ) :
-    stop_requested{false},
-    allocate_callback{allocate_callback},
-    deallocate_callback{deallocate_callback},
-    userdata{userdata}
-  {
+      AllocateCallback allocate_callback,
+      DeallocateCallback deallocate_callback,
+      void* userdata) :
+      stop_requested{false},
+      allocate_callback{allocate_callback},
+      deallocate_callback{deallocate_callback},
+      userdata{userdata} {
     this->converter.OutputPixelFormat = Pylon::PixelType_RGB8packed;
     this->converter.OutputBitAlignment = Pylon::OutputBitAlignment_MsbAligned;
     this->camera.Attach(Pylon::CTlFactory::GetInstance().CreateFirstDevice());
     try {
       this->camera.Open();
-    }
-    catch (Pylon::GenericException const& e)
-    {
+    } catch (Pylon::GenericException const& e) {
       throw std::runtime_error(e.what());
     }
     this->thread = std::thread(&VideoReaderPylon::Impl::read, this);
@@ -70,10 +65,10 @@ struct VideoReaderPylon::Impl {
 
   void read() {
     this->camera.StartGrabbing();
-    while (!this->stop_requested)
-    {
+    while (!this->stop_requested) {
       Pylon::CGrabResultPtr grabResult;
-      if (!this->camera.RetrieveResult(500, grabResult, Pylon::TimeoutHandling_Return)) {
+      if (!this->camera.RetrieveResult(
+              500, grabResult, Pylon::TimeoutHandling_Return)) {
         //this->impl->running = false;
         continue;
       }
@@ -81,8 +76,7 @@ struct VideoReaderPylon::Impl {
         continue;
       {
         std::lock_guard<SpinLock> guard(this->read_queue_lock);
-        if (this->read_queue.size() > 10)
-        {
+        if (this->read_queue.size() > 10) {
           // cleanup queue
           for (int i = 0; i < 8; ++i)
             this->read_queue.pop_front();
@@ -108,25 +102,28 @@ struct VideoReaderPylon::Impl {
     int32_t const width = static_cast<int32_t>(result->GetWidth());
     int32_t const height = static_cast<int32_t>(result->GetHeight());
     int32_t alignment = 16;
-    int32_t const preferred_stride = (width * 3 + alignment - 1) & ~(alignment - 1);
+    int32_t const preferred_stride =
+        (width * 3 + alignment - 1) & ~(alignment - 1);
 
     Frame::number_t const number = result->GetBlockID();
     Frame::timestamp_s_t const timestamp_s = result->GetTimeStamp() / 1000.0;
 
     FrameUP frame(new Frame(
-      this->deallocate_callback, this->userdata, {
-        height, // height
-        width,  // width
-        3,  // channels
-        SCALAR_TYPE::U8,  // scalar_type;
-        preferred_stride,  // stride
-        nullptr,  // data
-        nullptr  // user_data
-      },
-      number, timestamp_s
-    ));
+        this->deallocate_callback,
+        this->userdata,
+        {
+            height,  // height
+            width,  // width
+            3,  // channels
+            SCALAR_TYPE::U8,  // scalar_type;
+            preferred_stride,  // stride
+            nullptr,  // data
+            nullptr  // user_data
+        },
+        number,
+        timestamp_s));
     if (decode) {
-      VideoReader::VRImage *img = &frame->image;
+      VideoReader::VRImage* img = &frame->image;
       (*this->allocate_callback)(img, this->userdata);
       if (!img->data) {
         throw std::runtime_error("Failed to allocate image for pylon");
@@ -135,23 +132,22 @@ struct VideoReaderPylon::Impl {
     }
     return frame;
   }
-
 };
 
 VideoReaderPylon::VideoReaderPylon(
-  std::string const& url,
-  std::vector<std::string> const& parameter_pairs,
-  std::vector<std::string> const& extras,
-  AllocateCallback allocate_cb,
-  DeallocateCallback deallocate_cb,
-  VideoReader::LogCallback log_callback,
-  void* userdata
-  ) {
+    std::string const& url,
+    std::vector<std::string> const& parameter_pairs,
+    std::vector<std::string> const& extras,
+    AllocateCallback allocate_cb,
+    DeallocateCallback deallocate_cb,
+    VideoReader::LogCallback log_callback,
+    void* userdata) {
   if (!extras.empty()) {
     throw std::runtime_error("extras not supported in pylon (yet)");
   }
   Pylon::PylonInitialize();
-  this->impl = std::unique_ptr<Impl>(new Impl{allocate_cb, deallocate_cb, userdata});
+  this->impl =
+      std::unique_ptr<Impl>(new Impl{allocate_cb, deallocate_cb, userdata});
 }
 
 bool VideoReaderPylon::is_seekable() const {
@@ -162,11 +158,9 @@ VideoReader::FrameUP VideoReaderPylon::next_frame(bool decode) {
   return this->impl->next_frame(decode);
 }
 
-VideoReader::Frame::number_t VideoReaderPylon::size() const
-{
+VideoReader::Frame::number_t VideoReaderPylon::size() const {
   return 0;
 }
-
 
 VideoReaderPylon::~VideoReaderPylon() {
   this->impl->stop_requested = true;

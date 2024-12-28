@@ -1,14 +1,13 @@
 #pragma once
 extern "C" {
-#include <libavutil/dict.h>
-#include <libavformat/avformat.h>
-#include <libswscale/swscale.h>
 #include <libavcodec/avcodec.h>
+#include <libavformat/avformat.h>
+#include <libavutil/dict.h>
+#include <libswscale/swscale.h>
 }
 #include <memory>
 #include <string>
 #include <vector>
-
 
 struct AVDictionaryDeleter {
   void operator()(AVDictionary* av_dictionary) const noexcept {

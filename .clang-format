@@ -1,0 +1,203 @@
+BasedOnStyle: LLVM
+
+# Always break after an open bracket, if the parameters
+# don’t fit on a single line, e.g.:
+#
+#  someLongFunction(
+#     argument1, argument2);
+#
+AlignAfterOpenBracket: AlwaysBreak
+
+# Break constructor initializers after the colon and commas.
+#
+# Constructor() :
+#     initializer1(),
+#     initializer2()
+#
+BreakConstructorInitializers: AfterColon
+
+# If false, a function call’s arguments will either be all on the same
+# line or will have one line each.
+#
+# true:
+# void f() {
+#   f(aaaaaaaaaaaaaaaaaaaa, aaaaaaaaaaaaaaaaaaaa,
+#     aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);
+# }
+#
+# false:
+# void f() {
+#   f(aaaaaaaaaaaaaaaaaaaa,
+#     aaaaaaaaaaaaaaaaaaaa,
+#     aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);
+# }
+#
+BinPackArguments: false
+
+# If false, a function declaration’s or function definition’s parameters will
+# either all be on the same line or will have one line each.
+#
+# true:
+# void f(int aaaaaaaaaaaaaaaaaaaa, int aaaaaaaaaaaaaaaaaaaa,
+#         int aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa) {}
+#
+# false:
+# void f(int aaaaaaaaaaaaaaaaaaaa,
+#         int aaaaaaaaaaaaaaaaaaaa,
+#         int aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa) {}
+#
+BinPackParameters: false
+
+# Don’t align escaped newlines.
+#
+# #define A \
+#   int aaaa; \
+#   int b; \
+#   int dddddddddd;
+#
+AlignEscapedNewlines: DontAlign
+
+# The number of spaces before trailing line comments (// - comments).
+#
+#  ajosn_pos_t pos;  // pos is public to show the position
+#
+SpacesBeforeTrailingComments: 2
+
+# If true, aligns trailing comments.
+#
+# true:                                   false:
+# int a;     // My comment a      vs.     int a; // My comment a
+# int b = 2; // comment  b                int b = 2; // comment about b
+#
+AlignTrailingComments: false
+
+
+# If true, clang-format will attempt to re-flow comments.
+#
+# false:
+# // veryVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryLongComment with plenty of information
+# /* second veryVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryLongComment with plenty of information */
+#
+# true:
+# // veryVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryLongComment with plenty of
+# // information
+# /* second veryVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryLongComment with plenty of
+#   * information */
+#
+ReflowComments: false
+
+# Never merge blocks into a single line.
+#
+# while (true) {
+# }
+# while (true) {
+#   continue;
+# }
+#
+AllowShortBlocksOnASingleLine: Never
+
+# Never merge functions into a single line.
+AllowShortFunctionsOnASingleLine: None
+
+# Never put short ifs on the same line.
+#
+# if (a)
+#   return;
+#
+# if (b)
+#   return;
+# else
+#   return;
+#
+# if (c)
+#   return;
+# else {
+#   return;
+# }
+#
+AllowShortIfStatementsOnASingleLine: Never
+
+# Align reference to the left.
+#
+# int& a;
+#
+# not available in older formatter versions
+# ReferenceAlignment: Left
+
+# Align pointer to the left.
+#
+# int* a;
+#
+PointerAlignment: Left
+
+# Indent width for line continuations.
+#
+# int i =         //  VeryVeryVeryVeryVeryLongComment
+#     longFunction( // Again a long comment
+#         arg);
+ContinuationIndentWidth: 4
+
+# The number of columns to use for indentation.
+#
+# void f() {
+#   someFunction();
+#   if (true, false) {
+#     f();
+#   }
+# }
+IndentWidth: 2
+
+# If the constructor initializers don’t fit on a line,
+# put each initializer on its own line.
+#
+# true:
+# SomeClass::Constructor()
+#     : aaaaaaaa(aaaaaaaa), aaaaaaaa(aaaaaaaa), aaaaaaaa(aaaaaaaaaaaaaaaaaaaaaaaaa) {
+#   return 0;
+# }
+#
+# false:
+# SomeClass::Constructor()
+#     : aaaaaaaa(aaaaaaaa), aaaaaaaa(aaaaaaaa),
+#       aaaaaaaa(aaaaaaaaaaaaaaaaaaaaaaaaa) {
+#   return 0;
+# }
+#
+ConstructorInitializerAllOnOneLineOrOnePerLine: true
+
+# If a constructor definition with a member initializer list doesn’t fit
+# on a single line, allow putting all member initializers onto the next line,
+# if `ConstructorInitializerAllOnOneLineOrOnePerLine` is true. Note that
+# this parameter has no effect if
+# `ConstructorInitializerAllOnOneLineOrOnePerLine` is false.
+#
+# true:
+# MyClass::MyClass() :
+#     member0(0), member1(2) {}
+#
+# false:
+# MyClass::MyClass() :
+#     member0(0),
+#     member1(2) {}
+#
+AllowAllConstructorInitializersOnNextLine: false
+
+# Always break after template declaration.
+#
+# template <typename T>
+# T foo() {
+# }
+# template <typename T>
+# T foo(int aaaaaaaaaaaaaaaaaaaaa,
+#       int bbbbbbbbbbbbbbbbbbbbb) {
+# }
+#
+AlwaysBreakTemplateDeclarations: Yes
+
+# Never merge lambdas into a single line.
+AllowShortLambdasOnASingleLine: None
+
+Standard: c++17
+UseTab: Never
+
+# AllowAllArgumentsOnNextLine: false

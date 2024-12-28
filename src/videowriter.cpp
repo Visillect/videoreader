@@ -1,32 +1,34 @@
 #include <videoreader/videowriter.h>
-extern "C"
-{
+extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
-#include <libswscale/swscale.h>
 #include <libavutil/opt.h>
+#include <libswscale/swscale.h>
 }
-#include <stdexcept>  // std::runtime_error
-#include <optional>  // std::optional
-#include <charconv>  // std::from_chars
 #include "ffmpeg_common.hpp"
-#include <thread>
-#include <deque>
+#include <charconv>  // std::from_chars
 #include <condition_variable>
-
+#include <deque>
+#include <optional>  // std::optional
+#include <stdexcept>  // std::runtime_error
+#include <thread>
 
 static std::string format_error(int const errnum, char const* const message) {
   return std::string(message) + " (" + get_av_error(errnum) + ")";
 }
 
-static void log_packet(const AVFormatContext *fmt_ctx, const AVPacket *pkt)
-{
-    AVRational *time_base = &fmt_ctx->streams[pkt->stream_index]->time_base;
-    printf("pts:%ld pts_time:%.6g dts:%ld dts_time:%.6g duration:%ld duration_time:%.6g stream_index:%d\n",
-           pkt->pts, av_q2d(*time_base) * pkt->pts,
-           pkt->dts, av_q2d(*time_base) * pkt->dts,
-           pkt->duration, av_q2d(*time_base) * pkt->duration,
-           pkt->stream_index);
+static void log_packet(const AVFormatContext* fmt_ctx, const AVPacket* pkt) {
+  AVRational* time_base = &fmt_ctx->streams[pkt->stream_index]->time_base;
+  printf(
+      "pts:%ld pts_time:%.6g dts:%ld dts_time:%.6g duration:%ld "
+      "duration_time:%.6g stream_index:%d\n",
+      pkt->pts,
+      av_q2d(*time_base) * pkt->pts,
+      pkt->dts,
+      av_q2d(*time_base) * pkt->dts,
+      pkt->duration,
+      av_q2d(*time_base) * pkt->duration,
+      pkt->stream_index);
 }
 
 struct VideoWriter::Impl {
@@ -50,38 +52,45 @@ struct VideoWriter::Impl {
   std::mutex m;
   std::exception_ptr exception;
 
-  Impl(bool realtime):
-    pkt(av_packet_alloc()), realtime{realtime}
-  {}
+  Impl(bool realtime) : pkt(av_packet_alloc()), realtime{realtime} {
+  }
 
-  void send_frame(AVFrame *frame) {
+  void send_frame(AVFrame* frame) {
     if (const int ret = avcodec_send_frame(this->enc.get(), frame); ret < 0) {
-      throw std::runtime_error(format_error(ret, "avcodec_send_frame() failed"));
+      throw std::runtime_error(
+          format_error(ret, "avcodec_send_frame() failed"));
     }
     for (;;) {
-      const int receive_packet_ret = avcodec_receive_packet(this->enc.get(), this->pkt.get());
+      const int receive_packet_ret =
+          avcodec_receive_packet(this->enc.get(), this->pkt.get());
       if (receive_packet_ret == AVERROR(EAGAIN))  // No more packets for now.
         break;
       if (receive_packet_ret == AVERROR_EOF)  // No more packets, ever.
         break;
       if (receive_packet_ret < 0) {
-        throw std::runtime_error(format_error(receive_packet_ret, "avcodec_receive_packet() failed"));
+        throw std::runtime_error(format_error(
+            receive_packet_ret, "avcodec_receive_packet() failed"));
       }
 
-      av_packet_rescale_ts(this->pkt.get(), this->enc->time_base, this->st->time_base);
+      av_packet_rescale_ts(
+          this->pkt.get(), this->enc->time_base, this->st->time_base);
       this->pkt->stream_index = this->st->index;
       // log_packet(this->oc.get(), this->pkt.get());
       // if (int const ret = av_write_frame(this->oc.get(), this->pkt.get()); ret < 0) {
       //   throw std::runtime_error(format_error(ret, "av_write_frame() failed"));
       // }
-      if (int const ret = av_interleaved_write_frame(this->oc.get(), this->pkt.get()); ret < 0) {
-        throw std::runtime_error(format_error(ret, "av_interleaved_write_frame() failed"));
+      if (int const ret =
+              av_interleaved_write_frame(this->oc.get(), this->pkt.get());
+          ret < 0) {
+        throw std::runtime_error(
+            format_error(ret, "av_interleaved_write_frame() failed"));
       }
     }
     if (!frame) {  // close
       if (this->oc) {
         if (int const ret = av_write_trailer(this->oc.get()); ret != 0) {
-          throw std::runtime_error(format_error(ret, "av_write_trailer() failed"));
+          throw std::runtime_error(
+              format_error(ret, "av_write_trailer() failed"));
         }
       }
       if (this->oc && !(this->oc->oformat->flags & AVFMT_NOFILE)) {
@@ -98,7 +107,9 @@ struct VideoWriter::Impl {
       for (;;) {
         {
           std::unique_lock lk(m);
-          cv.wait(lk, [&]{return !this->write_queue.empty() ;});
+          cv.wait(lk, [&] {
+            return !this->write_queue.empty();
+          });
           popped_frame = std::move(this->write_queue.front());
           this->write_queue.pop_front();
         }
@@ -107,25 +118,25 @@ struct VideoWriter::Impl {
           break;
         }
       }
-    }
-    catch (...) {
+    } catch (...) {
       this->exception = std::current_exception();
     }
   }
 
   bool push(VideoReader::Frame const& frame) {
     VideoReader::VRImage const& img = frame.image;
-    if (
-      this->frame->width != img.width ||
-      this->frame->height != img.height
-    ) {
+    if (this->frame->width != img.width || this->frame->height != img.height) {
       throw std::runtime_error("can't change video frame size");
     }
     if (const int ret = sws_scale(
-      this->sws_ctx.get(),
-      &img.data, &img.stride, 0, img.height,
-      this->frame->data,
-      this->frame->linesize); ret < 0) {
+            this->sws_ctx.get(),
+            &img.data,
+            &img.stride,
+            0,
+            img.height,
+            this->frame->data,
+            this->frame->linesize);
+        ret < 0) {
       throw std::runtime_error(format_error(ret, "sws_scale() failed"));
     }
     if (this->exception) {
@@ -135,7 +146,8 @@ struct VideoWriter::Impl {
     if (this->realtime) {
       AVFrameUP dynframe{av_frame_alloc()};
       // `av_frame_ref` is so bad. We make a copy. It could be 300% better.
-      if (const int ret = av_frame_ref(dynframe.get(), this->frame.get()); ret < 0) {
+      if (const int ret = av_frame_ref(dynframe.get(), this->frame.get());
+          ret < 0) {
         throw std::runtime_error(format_error(ret, "av_frame_ref() failed"));
       }
       std::unique_lock lk(this->m);
@@ -167,44 +179,44 @@ struct VideoWriter::Impl {
       this->send_frame(nullptr);
     }
   }
-
 };
 
 static int64_t pop_value_int64(
-    AVDictionary* dict,
-    const char *key,
-    int64_t const default_value) {
+    AVDictionary* dict, const char* key, int64_t const default_value) {
   AVDictionaryEntry const* entry = av_dict_get(dict, key, NULL, 0);
   if (entry) {
     av_dict_set(&dict, key, NULL, 0);  // remove item
     std::string const str{entry->value};
     int64_t result{};
-    auto [ptr, ec] = std::from_chars(str.data(), str.data() + str.size(), result);
+    auto [ptr, ec] =
+        std::from_chars(str.data(), str.data() + str.size(), result);
     if (ec == std::errc()) {
       return result;
-    } else {
-      throw std::runtime_error("`" + str + "` is not a valid int64");
     }
+    throw std::runtime_error("`" + str + "` is not a valid int64");
   }
   return default_value;
 }
 
 VideoWriter::VideoWriter(
-  std::string const& uri,
-  VideoReader::VRImage const& format,
-  std::vector<std::string> const& parameter_pairs,  // size % 2 == 0
-  bool realtime,
-  VideoReader::LogCallback log_callback,
-  void* userdata
-) : impl{new Impl(realtime)} {
-  this->impl->sws_ctx.reset(
-    sws_getContext(
-      format.width, format.height,
+    std::string const& uri,
+    VideoReader::VRImage const& format,
+    std::vector<std::string> const& parameter_pairs,  // size % 2 == 0
+    bool realtime,
+    VideoReader::LogCallback log_callback,
+    void* userdata) :
+    impl{new Impl(realtime)} {
+  this->impl->sws_ctx.reset(sws_getContext(
+      format.width,
+      format.height,
       AV_PIX_FMT_RGB24 /* from */,
-      format.width, format.height,
+      format.width,
+      format.height,
       AV_PIX_FMT_YUV420P /* to */,
-      SWS_BICUBIC, NULL, NULL, NULL)
-  );
+      SWS_BICUBIC,
+      NULL,
+      NULL,
+      NULL));
   if (!this->impl->sws_ctx) {
     throw std::runtime_error("sws_getContext() failed");
   }
@@ -214,13 +226,16 @@ VideoWriter::VideoWriter(
   // find codec
   AVFormatContext* oc_ = nullptr;
   {
-    if (const int ret = avformat_alloc_output_context2(&oc_, NULL, format_name, uri.c_str()); ret < 0) {
-      throw std::runtime_error(format_error(ret, "avformat_alloc_output_context2 error"));
+    if (const int ret = avformat_alloc_output_context2(
+            &oc_, NULL, format_name, uri.c_str());
+        ret < 0) {
+      throw std::runtime_error(
+          format_error(ret, "avformat_alloc_output_context2 error"));
     }
     this->impl->oc.reset(oc_);
   }
 
-  const AVCodec *codec = avcodec_find_encoder_by_name(encoder_name);
+  const AVCodec* codec = avcodec_find_encoder_by_name(encoder_name);
   // oc_->oformat->video_codec = codec;
   // const AVCodec *codec = avcodec_find_encoder(oc_->oformat->video_codec);
   if (!codec) {
@@ -233,7 +248,8 @@ VideoWriter::VideoWriter(
     } else {
       profile_name = "has no profiles";
     }
-    std::string const message = "using profile `" + std::string(profile_name) + "`";
+    std::string const message =
+        "using profile `" + std::string(profile_name) + "`";
     log_callback(message.c_str(), VideoReader::LogLevel::INFO, userdata);
     log_callback(codec->long_name, VideoReader::LogLevel::INFO, userdata);
   }
@@ -244,7 +260,7 @@ VideoWriter::VideoWriter(
   }
   this->impl->st->id = 0;
 
-  AVCodecContext *c = avcodec_alloc_context3(codec);
+  AVCodecContext* c = avcodec_alloc_context3(codec);
   if (!c) {
     throw std::runtime_error("avcodec_alloc_context3() failed");
   }
@@ -254,12 +270,15 @@ VideoWriter::VideoWriter(
 
   // c->codec_id = oc_->oformat->video_codec;
   c->codec_id = codec->id;
-  c->bit_rate = pop_value_int64(options.get(), "br", 4000000);  // bits per second
+  c->bit_rate =
+      pop_value_int64(options.get(), "br", 4000000);  // bits per second
   c->width = format.width;
   c->height = format.height;
-  this->impl->st->time_base = AVRational{1, 65535}; /* 65535 - is MPEG 4 limit */
+  this->impl->st->time_base =
+      AVRational{1, 65535}; /* 65535 - is MPEG 4 limit */
   c->time_base = this->impl->st->time_base;
-  c->framerate = AVRational{0, 1};  // AVRational{c->time_base.den, c->time_base.num};
+  c->framerate =
+      AVRational{0, 1};  // AVRational{c->time_base.den, c->time_base.num};
   //c->rc_buffer_size = 8339456; // 1 MiB
   c->gop_size = 12;  // emit one intra frame every twelve frames at most
   c->pix_fmt = AV_PIX_FMT_YUV420P;
@@ -277,9 +296,12 @@ VideoWriter::VideoWriter(
   options.reset(options_ptr);
   int const count = av_dict_count(options_ptr);
   if (count) {
-    const AVDictionaryEntry *e = NULL;
+    const AVDictionaryEntry* e = NULL;
     while ((e = av_dict_get(options_ptr, "", e, AV_DICT_IGNORE_SUFFIX))) {
-      log_callback((std::string("invalid key `") + e->key + "`").c_str(), VideoReader::LogLevel::ERROR, userdata);
+      log_callback(
+          (std::string("invalid key `") + e->key + "`").c_str(),
+          VideoReader::LogLevel::ERROR,
+          userdata);
     }
     throw std::runtime_error("invalid arguments. see logs for mare info.");
   }
@@ -295,8 +317,10 @@ VideoWriter::VideoWriter(
     this->impl->frame->width = c->width;
     this->impl->frame->height = c->height;
 
-    if (const int ret = av_frame_get_buffer(this->impl->frame.get(), 32); ret < 0) {
-      throw std::runtime_error(format_error(ret, "av_frame_get_buffer() failed"));
+    if (const int ret = av_frame_get_buffer(this->impl->frame.get(), 32);
+        ret < 0) {
+      throw std::runtime_error(
+          format_error(ret, "av_frame_get_buffer() failed"));
     }
   }
   if (!this->impl->st->codecpar) {
@@ -308,16 +332,19 @@ VideoWriter::VideoWriter(
 
   /* open the output file, if needed */
   if (!(oc_->oformat->flags & AVFMT_NOFILE)) {
-    if (int const ret = avio_open(&oc_->pb, uri.c_str(), AVIO_FLAG_WRITE); ret < 0) {
+    if (int const ret = avio_open(&oc_->pb, uri.c_str(), AVIO_FLAG_WRITE);
+        ret < 0) {
       throw std::runtime_error(format_error(ret, "avio_open() failed"));
     }
   }
   /* Write the stream header, if any. */
   if (int const ret = avformat_write_header(oc_, NULL); ret < 0) {
-    throw std::runtime_error(format_error(ret, "avformat_write_header() failed"));
+    throw std::runtime_error(
+        format_error(ret, "avformat_write_header() failed"));
   }
   if (realtime) {
-    this->impl->write_thread = std::thread(&VideoWriter::Impl::write, this->impl.get());
+    this->impl->write_thread =
+        std::thread(&VideoWriter::Impl::write, this->impl.get());
   }
 }
 
