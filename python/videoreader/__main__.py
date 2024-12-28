@@ -38,12 +38,7 @@ def main():
         )
     delay = 0.0
 
-    from minimg.view.view_client import connect
-
-    c = connect(__file__)
-
     for image, number, timestamp, extras in reader:
-        c.log(f"{number} @ timestamp", image)
         print(f"{fmt_image(image)} {number}, {timestamp:g}, {extras}")
         if args.out:
             from random import random
