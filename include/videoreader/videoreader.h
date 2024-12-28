@@ -1,23 +1,20 @@
 #pragma once
+#include <memory>
 #include <string>
 #include <vector>
-#include <memory>
 
-
-class VideoReader
-{
+class VideoReader {
 public:
-  enum class SCALAR_TYPE: int32_t {
-    U8
-  };
+  enum class SCALAR_TYPE : int32_t { U8 };
   struct VRImage {
     int32_t height;
     int32_t width;
     int32_t channels;
     SCALAR_TYPE scalar_type;
     int32_t stride;  // 0 when unknown. number of bytes between rows
-    uint8_t *data;  // pointer to the first pixel
-    void *user_data;  // user supplied data, useful for freeing in DeallocateCallback
+    uint8_t* data;  // pointer to the first pixel
+    void*
+        user_data;  // user supplied data, useful for freeing in DeallocateCallback
   };
 
   /**
@@ -28,20 +25,32 @@ public:
    * When `VRImage.data` is left `nullptr`, the library treats it like
    * memory allocation error
    */
-  using AllocateCallback = void (*)(VRImage *, void*);
-  using DeallocateCallback = void (*)(VRImage *, void*);
+  using AllocateCallback = void (*)(VRImage*, void*);
+  using DeallocateCallback = void (*)(VRImage*, void*);
 
   struct Frame {
     using number_t = uint64_t;
     using timestamp_s_t = double;
-    Frame(DeallocateCallback free, void *userdata, VRImage const& image, number_t number, timestamp_s_t timestamp_s) :
-      number{number}, timestamp_s{timestamp_s}, free{free}, userdata{userdata}, image{image} {}
-    number_t number;  // zero-indexed; this number is not continuous due to possible invalid data frames
+    Frame(
+        DeallocateCallback free,
+        void* userdata,
+        VRImage const& image,
+        number_t number,
+        timestamp_s_t timestamp_s) :
+        number{number},
+        timestamp_s{timestamp_s},
+        free{free},
+        userdata{userdata},
+        image{image} {
+    }
+    number_t
+        number;  // zero-indexed; this number is not continuous due to possible invalid data frames
     timestamp_s_t timestamp_s;  // seconds since the start of the video
-    unsigned char const* extras{};  // nullptr ot msgpack list in requested order. MUST be freed by `free` ca;;
+    unsigned char const*
+        extras{};  // nullptr ot msgpack list in requested order. MUST be freed by `free` ca;;
     unsigned int extras_size{};  // num bytes in extra
     DeallocateCallback free;
-    void *userdata;
+    void* userdata;
     VRImage image;
     ~Frame();  // Frees VRImage and extras
   };
@@ -62,7 +71,8 @@ public:
   /**
    * Main logging callback. Useful for debugging and to not flood stdout
    */
-  using LogCallback = void (*)(char const* message, LogLevel log_level, void* userdata);
+  using LogCallback =
+      void (*)(char const* message, LogLevel log_level, void* userdata);
 
 public:
   // url: file path or any ffmpeg url
@@ -74,14 +84,13 @@ public:
   //
   // see https://ffmpeg.org/ffmpeg-protocols.html for more details
   static std::unique_ptr<VideoReader> create(
-    std::string const& url,
-    std::vector<std::string> const& parameter_pairs = {}, // size % 2 == 0
-    std::vector<std::string> const& extras = {},  // for extra_data
-    AllocateCallback alloc_callback = nullptr,
-    DeallocateCallback dealloc_callback = nullptr,
-    LogCallback log_callback = nullptr,
-    void* userdata = nullptr
-  );
+      std::string const& url,
+      std::vector<std::string> const& parameter_pairs = {},  // size % 2 == 0
+      std::vector<std::string> const& extras = {},  // for extra_data
+      AllocateCallback alloc_callback = nullptr,
+      DeallocateCallback dealloc_callback = nullptr,
+      LogCallback log_callback = nullptr,
+      void* userdata = nullptr);
   virtual ~VideoReader();
 
   VideoReader& operator=(VideoReader const&) = delete;
@@ -98,5 +107,5 @@ public:
   // decode: decode the frame (false is useful for skipping frames,
   //         the result will be a valid frame with uinitialized pixel values)
   // frame data are read in a separate thread
-  virtual FrameUP next_frame(bool decode=true) = 0;
+  virtual FrameUP next_frame(bool decode = true) = 0;
 };

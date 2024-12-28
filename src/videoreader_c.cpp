@@ -1,10 +1,10 @@
+#include <stdint.h>
 #include <videoreader/videoreader.h>
 #include <videoreader/videowriter.h>
-#include <stdint.h>
 
 #define API extern "C"
-typedef void (*videoreader_log)(char const*, int, void*);
-typedef void (*videoreader_allocate)(char const*);
+using videoreader_log = void (*)(char const*, int, void*);
+using videoreader_allocate = void (*)(char const*);
 
 typedef struct {
   int32_t height;
@@ -12,10 +12,10 @@ typedef struct {
   int32_t channels;
   int32_t scalar_type;
   int32_t stride;  // 0 when unknown. number of bytes between rows
-  uint8_t *data;  // pointer to the first pixel
-  void *user_data;  // user supplied data, useful for freeing in DeallocateCallback
+  uint8_t* data;  // pointer to the first pixel
+  void*
+      user_data;  // user supplied data, useful for freeing in DeallocateCallback
 } VRImage;
-
 
 static_assert(sizeof(VRImage) == sizeof(VideoReader::VRImage), "error");
 
@@ -38,11 +38,11 @@ API int videoreader_create(
     void* userdata) {
   try {
     std::vector<std::string> parameter_pairs;
-    for (int idx{} ; idx < argc; ++idx ) {
+    for (int idx{}; idx < argc; ++idx) {
       parameter_pairs.emplace_back(argv[idx]);
     }
     std::vector<std::string> extras_vec;
-    for (int idx{} ; idx < extrasc; ++idx ) {
+    for (int idx{}; idx < extrasc; ++idx) {
       extras_vec.emplace_back(extras[idx]);
     }
     auto video_reader = VideoReader::create(
@@ -61,14 +61,11 @@ API int videoreader_create(
   return 0;
 }
 
-API int videoreader_set(
-    struct videoreader* reader,
-    char const* argv[],
-    int argc
-) {
+API int
+videoreader_set(struct videoreader* reader, char const* argv[], int argc) {
   try {
     std::vector<std::string> parameter_pairs;
-    for (int idx{} ; idx < argc; ++idx ) {
+    for (int idx{}; idx < argc; ++idx) {
       parameter_pairs.emplace_back(argv[idx]);
     }
     reinterpret_cast<VideoReader*>(reader)->set(parameter_pairs);
@@ -78,7 +75,6 @@ API int videoreader_set(
   }
   return 0;
 }
-
 
 API void videoreader_delete(struct videoreader* reader) {
   delete reinterpret_cast<VideoReader*>(reader);
@@ -95,8 +91,9 @@ API int videoreader_next_frame(
   try {
     VideoReader::FrameUP frame =
         reinterpret_cast<VideoReader*>(reader)->next_frame(decode);
-    if (!frame)
+    if (!frame) {
       return 1;
+    }
 
     auto const& image = frame->image;
     dst_img->height = image.height;
@@ -133,11 +130,10 @@ API int videowriter_create(
     int argc,
     bool realtime,
     videoreader_log log_callback,
-    void* userdata
-) {
+    void* userdata) {
   try {
     std::vector<std::string> parameter_pairs;
-    for (int idx{} ; idx < argc; ++idx ) {
+    for (int idx{}; idx < argc; ++idx) {
       parameter_pairs.emplace_back(argv[idx]);
     }
     *writer = reinterpret_cast<struct videowriter*>(new VideoWriter(
@@ -159,13 +155,16 @@ API void videowriter_delete(struct videowriter* reader) {
 }
 
 API int videowriter_push(
-  struct videowriter* writer,
-  VRImage const* img,
-  double timestamp_s) {
+    struct videowriter* writer, VRImage const* img, double timestamp_s) {
   try {
-    VideoReader::Frame frame{0, nullptr, *reinterpret_cast<VideoReader::VRImage const*>(img), 0, timestamp_s};
-    bool const successful_push = reinterpret_cast<VideoWriter*>(
-      writer)->push(frame);
+    VideoReader::Frame frame{
+        0,
+        nullptr,
+        *reinterpret_cast<VideoReader::VRImage const*>(img),
+        0,
+        timestamp_s};
+    bool const successful_push =
+        reinterpret_cast<VideoWriter*>(writer)->push(frame);
     return successful_push ? 0 : 1;
   } catch (std::exception& e) {
     videoreader_what_str = e.what();
@@ -173,8 +172,7 @@ API int videowriter_push(
   }
 }
 
-API int videowriter_close(
-  struct videowriter* writer) {
+API int videowriter_close(struct videowriter* writer) {
   try {
     reinterpret_cast<VideoWriter*>(writer)->close();
   } catch (std::exception& e) {
