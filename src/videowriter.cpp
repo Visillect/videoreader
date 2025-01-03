@@ -1,4 +1,4 @@
-#include <videoreader/videowriter.h>
+#include <videoreader/videowriter.hpp>
 #ifdef VIDEOWRITER_WITH_FFMPEG
 extern "C" {
 #include <libavcodec/avcodec.h>

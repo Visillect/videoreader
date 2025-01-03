@@ -1,6 +1,6 @@
 #include <stdint.h>
-#include <videoreader/videoreader.h>
-#include <videoreader/videowriter.h>
+#include <videoreader/videoreader.hpp>
+#include <videoreader/videowriter.hpp>
 
 #define API extern "C"
 using videoreader_log = void (*)(char const*, int, void*);

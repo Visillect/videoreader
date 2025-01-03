@@ -1,4 +1,4 @@
-#include <videoreader/videoreader.h>
+#include <videoreader/videoreader.hpp>
 #include <string>
 #include <gtest/gtest.h>
 #include <stdexcept>

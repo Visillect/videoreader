@@ -1,4 +1,4 @@
-#include <videoreader/videoreader.h>
+#include <videoreader/videoreader.hpp>
 
 class VideoReaderFFmpeg : public VideoReader {
 public:

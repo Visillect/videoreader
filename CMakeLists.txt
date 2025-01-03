@@ -3,11 +3,11 @@ project(videoreader)
 
 add_library(videoreader
   src/videoreader.cpp
-  include/videoreader/videoreader.h
+  include/videoreader/videoreader.hpp
 )
 add_library(videowriter
   src/videowriter.cpp
-  include/videoreader/videowriter.h
+  include/videoreader/videowriter.hpp
 )
 
 macro(videoreader_setup target)
