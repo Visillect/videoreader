@@ -5,7 +5,9 @@ from . import VideoWriter
 
 def main():
     parser = ArgumentParser()
-    default = Path(__file__).parents[2] / "test" / "big_buck_bunny_480p_1mb.mp4"
+    default = (
+        Path(__file__).parents[2] / "test" / "big_buck_bunny_480p_1mb.mp4"
+    )
     parser.add_argument("uri", nargs="?", default=default)
     parser.add_argument(
         "--backend", choices=["base", "numpy", "minimg"], default="base"
@@ -18,7 +20,9 @@ def main():
         case "base":
             from . import VideoReaderBase as VideoReader
 
-            fmt_image = lambda image: f"{image.width}x{image.height}x{image.channels}"
+            fmt_image = (
+                lambda image: f"{image.width}x{image.height}x{image.channels}"
+            )
 
         case "numpy":
             from .numpy import VideoReaderNumpy as VideoReader

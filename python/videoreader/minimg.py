@@ -11,7 +11,9 @@ from minimg import MinImg, TYP_UINT8
 @ffi.callback("void (VRImage*, void*)")
 def alloc_callback_numpy(image: ffi.CData, self: ffi.CData) -> None:
     assert image.scalar_type == 0, f"non uint8 images not yet supported"
-    img = MinImg.empty(image.width, image.height, image.channels, mintype=TYP_UINT8)
+    img = MinImg.empty(
+        image.width, image.height, image.channels, mintype=TYP_UINT8
+    )
     image.data = img.data
     image.stride = img.stride
     address = int(ffi.cast("uintptr_t", image.data))

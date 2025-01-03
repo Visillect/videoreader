@@ -127,7 +127,9 @@ class VideoReaderBase(Generic[T]):
 
     def set(self, arguments: list[str]) -> None:
         argv_keepalive = [ffi.new("char[]", arg.encode()) for arg in arguments]
-        if backend.videoreader_set(self._handler, argv_keepalive, len(argv_keepalive)):
+        if backend.videoreader_set(
+            self._handler, argv_keepalive, len(argv_keepalive)
+        ):
             raise_error()
 
 
@@ -187,7 +189,9 @@ def videoreader_n_frames(uri: str) -> int:
     Get number of frames in a file
     """
     handler = ffi.new("struct videoreader **")
-    backend.videoreader_create(handler, uri.encode("utf-8"), [], 0, ffi.NULL, ffi.NULL)
+    backend.videoreader_create(
+        handler, uri.encode("utf-8"), [], 0, ffi.NULL, ffi.NULL
+    )
     n_frames = ffi.new("uint64_t *")
     backend.videoreader_size(handler[0], n_frames)
     backend.videoreader_delete(handler[0])
