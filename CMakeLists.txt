@@ -25,7 +25,15 @@ videoreader_setup(videowriter)
 option(VIDEOREADER_BUILD_CAPI "Videoreader: build C API" OFF)
 set(VIDEOREADER_CFFI OFF CACHE BOOL "Videoreader: build cffi backend")
 if (VIDEOREADER_CFFI AND NOT VIDEOREADER_BUILD_CAPI)
-  message(FATAL_ERROR "can't build cffi without CAPI")
+  set(VIDEOREADER_BUILD_CAPI ON)
+endif()
+
+if (VIDEOREADER_CFFI)
+  set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+
+  find_package(ffmpeg)
+  find_package(galaxy)
+  find_package(pylon)
 endif()
 
 set(WITH_FFMPEG "OFF")
@@ -100,31 +108,33 @@ if (VIDEOREADER_BUILD_CAPI)
   target_link_libraries(videoreader_c PRIVATE videoreader videowriter)
 
   if (VIDEOREADER_CFFI)
-    message(STATUS "WORKING_DIRECTORY: ${CMAKE_CURRENT_SOURCE_DIR}/python")
-    add_custom_command(
-      OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/videoreader/_videoreader.py"
-      COMMAND
-        ${PY_BUILD_CMAKE_PYTHON_INTERPRETER}
-        "${CMAKE_CURRENT_SOURCE_DIR}/python/videoreader/videoreader_build.py"
-    )
-    add_custom_target(
-      videoreader_cffi ALL
-      DEPENDS
-      "${CMAKE_CURRENT_BINARY_DIR}/videoreader/_videoreader.py"
-    )
-    add_dependencies(videoreader_c videoreader_cffi)
+    if (PY_BUILD_CMAKE_IMPORT_NAME)
+      add_custom_command(
+        OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/videoreader/_videoreader.py"
+        COMMAND
+          ${PY_BUILD_CMAKE_PYTHON_INTERPRETER}
+          "${CMAKE_CURRENT_SOURCE_DIR}/python/videoreader/videoreader_build.py"
+      )
+      add_custom_target(
+        videoreader_cffi ALL
+        DEPENDS
+        "${CMAKE_CURRENT_BINARY_DIR}/videoreader/_videoreader.py"
+      )
+      add_dependencies(videoreader_c videoreader_cffi)
 
-    install(TARGETS videoreader_c
-      EXCLUDE_FROM_ALL
-      COMPONENT python_modules
-      DESTINATION ${PY_BUILD_CMAKE_IMPORT_NAME}
-    )
-    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/videoreader/_videoreader.py"
-      EXCLUDE_FROM_ALL
-      COMPONENT python_modules
-      DESTINATION ${PY_BUILD_CMAKE_IMPORT_NAME}
-    )
-
+      install(TARGETS videoreader_c
+        EXCLUDE_FROM_ALL
+        COMPONENT python_modules
+        DESTINATION ${PY_BUILD_CMAKE_IMPORT_NAME}
+      )
+      install(FILES "${CMAKE_CURRENT_BINARY_DIR}/videoreader/_videoreader.py"
+        EXCLUDE_FROM_ALL
+        COMPONENT python_modules
+        DESTINATION ${PY_BUILD_CMAKE_IMPORT_NAME}
+      )
+    else()
+      message(WARNING "VIDEOREADER_CFFI is meant to be on only when building with python")
+    endif()
   endif()
 endif()
 
