@@ -1,5 +1,5 @@
 #include <stdexcept>
-#include <videoreader/videoreader.h>
+#include <videoreader/videoreader.hpp>
 
 #ifdef VIDEOREADER_WITH_FFMPEG
 #include "videoreader_ffmpeg.hpp"

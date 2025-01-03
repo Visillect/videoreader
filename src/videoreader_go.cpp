@@ -5,7 +5,7 @@
 #include <numeric>
 #include <stdexcept>
 #include <string>
-#include <videoreader/videoreader.h>
+#include <videoreader/videoreader.hpp>
 #ifdef USE_MINVIEWER_CLIENT
 #include <minviewer/client.hpp>
 #endif

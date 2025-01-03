@@ -1,5 +1,5 @@
 #pragma once
-#include "videoreader.h"
+#include "videoreader.hpp"
 
 class VideoWriter {
 public:
