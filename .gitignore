@@ -6,3 +6,8 @@
 benchmark.py
 # compiled output
 _videoreader.py
+# py_build_cmake.build output
+.py-build-cmake_cache
+*.egg-info
+*.tar.gz
+*.whl

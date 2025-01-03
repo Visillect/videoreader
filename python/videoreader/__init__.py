@@ -2,13 +2,14 @@
 from __future__ import annotations
 from typing import Callable, Iterator, NoReturn, TypeAlias, Generic, TypeVar
 from ._videoreader import ffi
+from pathlib import Path
 
 
-path = "libvideoreader_c.so"
+path = str(Path(__file__).parent / "libvideoreader_c.so")
 try:
     backend = ffi.dlopen(path)
 except OSError as e:
-    raise OSError(f'cant load dll "{path}", make sure it is compiled')
+    raise OSError(f'cant load dll "{path}", make sure it is compiled {e}')
 
 
 @ffi.callback("void(char const*, int, void*)")
