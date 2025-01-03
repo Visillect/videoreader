@@ -23,6 +23,10 @@ videoreader_setup(videoreader)
 videoreader_setup(videowriter)
 
 option(VIDEOREADER_BUILD_CAPI "Videoreader: build C API" OFF)
+set(VIDEOREADER_CFFI OFF CACHE BOOL "Videoreader: build cffi backend")
+if (VIDEOREADER_CFFI AND NOT VIDEOREADER_BUILD_CAPI)
+  message(FATAL_ERROR "can't build cffi without CAPI")
+endif()
 
 set(WITH_FFMPEG "OFF")
 if (FFMPEG_FOUND)
@@ -94,6 +98,34 @@ if (VIDEOREADER_BUILD_CAPI)
   # it can be any of type, so make sure we create a SHARED library
   add_library(videoreader_c SHARED src/videoreader_c.cpp)
   target_link_libraries(videoreader_c PRIVATE videoreader videowriter)
+
+  if (VIDEOREADER_CFFI)
+    message(STATUS "WORKING_DIRECTORY: ${CMAKE_CURRENT_SOURCE_DIR}/python")
+    add_custom_command(
+      OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/videoreader/_videoreader.py"
+      COMMAND
+        ${PY_BUILD_CMAKE_PYTHON_INTERPRETER}
+        "${CMAKE_CURRENT_SOURCE_DIR}/python/videoreader/videoreader_build.py"
+    )
+    add_custom_target(
+      videoreader_cffi ALL
+      DEPENDS
+      "${CMAKE_CURRENT_BINARY_DIR}/videoreader/_videoreader.py"
+    )
+    add_dependencies(videoreader_c videoreader_cffi)
+
+    install(TARGETS videoreader_c
+      EXCLUDE_FROM_ALL
+      COMPONENT python_modules
+      DESTINATION ${PY_BUILD_CMAKE_IMPORT_NAME}
+    )
+    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/videoreader/_videoreader.py"
+      EXCLUDE_FROM_ALL
+      COMPONENT python_modules
+      DESTINATION ${PY_BUILD_CMAKE_IMPORT_NAME}
+    )
+
+  endif()
 endif()
 
 if(BUILD_TESTING)

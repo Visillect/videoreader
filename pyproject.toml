@@ -1,0 +1,43 @@
+[project]
+name = "videoreader"
+version = "0.0.1"
+authors = [
+  { name="Arseniy Terekhin", email="senyai@gmail.com" },
+]
+description = "Video capture library"
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: C++",
+    "License :: OSI Approved :: MIT License",
+    "Typing :: Typed",
+]
+dependencies = [
+  "cffi"
+]
+[project.urls]
+"Homepage" = "https://github.com/Visillect/videoreader"
+"Bug Reports" = "https://github.com/Visillect/videoreader/issues"
+"Source" = "https://github.com/Visillect/videoreader"
+
+[build-system]
+requires = ["cffi", "py-build-cmake~=0.3.4"]
+build-backend = "py_build_cmake.build"
+
+[tool.black]
+line-length = 79
+target-version = ["py310"]
+
+[tool.py-build-cmake.sdist]
+include = ["CMakeLists.txt", "src/*", "include/videoreader/*.*", "cmake/*.*"]
+
+[tool.py-build-cmake.cmake]
+minimum_version = "3.17"
+build_type = "Release"
+source_path = "."
+options = {"VIDEOREADER_BUILD_CAPI" = true, "VIDEOREADER_CFFI" = true}
+build_args = ["-j"]
+install_components = ["python_modules"]
+
+[tool.py-build-cmake.module]
+directory = "python"
