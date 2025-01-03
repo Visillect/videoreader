@@ -20,6 +20,7 @@ macro(videoreader_setup target)
 endmacro()
 
 videoreader_setup(videoreader)
+videoreader_setup(videowriter)
 
 option(VIDEOREADER_BUILD_CAPI "Videoreader: build C API" OFF)
 
@@ -44,7 +45,7 @@ if (FFMPEG_FOUND)
   )
 
   # enable videowriter
-  videoreader_setup(videowriter)
+  target_compile_definitions(videowriter PRIVATE VIDEOWRITER_WITH_FFMPEG)
   target_link_libraries(videowriter PRIVATE videoreader)
   target_link_libraries(videowriter PRIVATE
     ffmpeg::avcodec

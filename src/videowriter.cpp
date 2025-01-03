@@ -1,4 +1,5 @@
 #include <videoreader/videowriter.h>
+#ifdef VIDEOWRITER_WITH_FFMPEG
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
@@ -10,8 +11,11 @@ extern "C" {
 #include <condition_variable>
 #include <deque>
 #include <optional>  // std::optional
-#include <stdexcept>  // std::runtime_error
 #include <thread>
+#endif
+#include <stdexcept>  // std::runtime_error
+
+#ifdef VIDEOWRITER_WITH_FFMPEG
 
 static std::string format_error(int const errnum, char const* const message) {
   return std::string(message) + " (" + get_av_error(errnum) + ")";
@@ -369,3 +373,25 @@ VideoWriter::~VideoWriter() {
     this->impl.reset(nullptr);
   }
 };
+#else
+
+struct VideoWriter::Impl {};
+
+VideoWriter::VideoWriter(
+    std::string const& uri,
+    VideoReader::VRImage const& format,
+    std::vector<std::string> const& parameter_pairs,  // size % 2 == 0
+    bool realtime,
+    VideoReader::LogCallback log_callback,
+    void* userdata) {
+  throw std::runtime_error("no backend compiled for videowriter");
+}
+bool VideoWriter::push(VideoReader::Frame const&) {
+  return false;
+}
+void VideoWriter::close() {
+}
+
+VideoWriter::~VideoWriter() = default;
+
+#endif
