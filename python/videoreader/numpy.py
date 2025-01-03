@@ -12,7 +12,9 @@ Image: TypeAlias = np.ndarray[Any, np.dtype[np.uint8]]
 def alloc_callback_numpy(image: ffi.CData, self: ffi.CData) -> None:
     assert image.scalar_type == 0, f"non uint8 images not yet supported"
     if image.channels == 3:
-        arr = np.empty((image.height, image.width, image.channels), dtype=np.uint8)
+        arr = np.empty(
+            (image.height, image.width, image.channels), dtype=np.uint8
+        )
         ai = arr.__array_interface__
         address = ai["data"][0]
         assert (
