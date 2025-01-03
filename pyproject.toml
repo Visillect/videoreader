@@ -35,7 +35,7 @@ include = ["CMakeLists.txt", "src/*", "include/videoreader/*.*", "cmake/*.*"]
 minimum_version = "3.17"
 build_type = "Release"
 source_path = "."
-options = {"VIDEOREADER_BUILD_CAPI" = true, "VIDEOREADER_CFFI" = true}
+options = {"VIDEOREADER_CFFI" = true}
 build_args = ["-j"]
 install_components = ["python_modules"]
 
