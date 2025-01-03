@@ -21,7 +21,12 @@ jobs:
       - name: 'clang-format'
         run: |
           find src include -name '*.cpp' -o -name '*.h' -o -name '*.hpp' | xargs clang-format --Werror -n
-      # - name: wheel
-      #   run: |
-      #     pip install build
-      #     python -m build . --wheel
+      - name: 'Install FFmpeg'
+        uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: libavcodec-dev libavdevice-dev libavformat-dev libswscale-dev
+          version: 1.0
+      - name: wheel
+        run: |
+          pip install build
+          python -m build . --wheel
