@@ -45,19 +45,9 @@ include(FindPackageHandleStandardArgs)
 macro(ffmpeg_find_library varname)
   find_library(${varname}
     NAMES ${ARGN}
-    HINTS
+    HINTS "${FFMPEG_INCLUDE_DIR}/.."
     ${FFMPEG_DIR}
-    $ENV{FFMPEG_DIR}
-    $ENV{HOME}/.local
     PATH_SUFFIXES lib64 lib bin
-    PATHS
-    /usr/local
-    /usr
-    /sw
-    /opt/local
-    /opt/csw
-    /opt
-    /mingw
   )
 endmacro()
 
