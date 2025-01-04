@@ -24,9 +24,50 @@ BOOL WINAPI consoleHandler(DWORD signal) {
 
 #endif
 
+static char VR_RESET[] = "\033[0m";
+static char VR_RED[] = "\033[31m";
+static char VR_GREEN[] = "\033[32m";
+static char VR_YELLOW[] = "\033[33m";
+static char VR_BLUE[] = "\033[34m";
+static char VR_MAGENTA[] = "\033[35m";
+static char VR_CYAN[] = "\033[36m";
+static char VR_WHITE[] = "\033[37m";
+
+static void disable_colors() {
+  *VR_RESET = *VR_RED = *VR_GREEN = *VR_YELLOW = *VR_BLUE = *VR_MAGENTA =
+      *VR_CYAN = *VR_WHITE = 0;
+}
+
+static bool terminal_supports_colors() {
+  const char* term = std::getenv("TERM");
+  if (term) {
+    std::string termStr(term);
+    return termStr.find("xterm") != std::string::npos ||
+           termStr.find("screen") != std::string::npos ||
+           termStr.find("tmux") != std::string::npos;
+  }
+  return false;  // Default to no support if TERM is not set
+}
+
 static void log_callback(
     char const* message, VideoReader::LogLevel log_level, void* userdata) {
-  std::cout << "[vr]" << message << '\n';
+  std::cout << [log_level]() {
+    switch (log_level) {
+    case VideoReader::LogLevel::DEBUG:
+      return VR_BLUE;
+    case VideoReader::LogLevel::ERROR:
+      return VR_RED;
+    case VideoReader::LogLevel::FATAL:
+      return VR_MAGENTA;
+    case VideoReader::LogLevel::INFO:
+      return VR_CYAN;
+    case VideoReader::LogLevel::WARNING:
+      return VR_YELLOW;
+    default:
+      return VR_WHITE;
+    }
+  }();
+  std::cout << "[vr]" << message << VR_RESET;
 }
 
 static void
@@ -42,9 +83,9 @@ run(std::string const& url,
   auto video_reader = VideoReader::create(
       url, parameter_pairs, extras, nullptr, nullptr, log_callback);
   uint64_t const frames_count = video_reader->size();
-  std::cout << "frames_count: " << frames_count << std::endl
-            << std::boolalpha << "is_seekaable: " << video_reader->is_seekable()
-            << std::endl;
+  std::cout << "frames_count: " << VR_CYAN << frames_count << VR_RESET << '\n'
+            << std::boolalpha << "is_seekaable: " << VR_CYAN
+            << video_reader->is_seekable() << VR_RESET << std::endl;
   unsigned int const FPS_SZ{16};
   std::vector<double> fps(FPS_SZ);
   std::vector<std::chrono::high_resolution_clock::duration> durations(FPS_SZ);
@@ -77,9 +118,10 @@ run(std::string const& url,
     c.add_image(frame->image, {{"obj_id", img_id}});
 #endif
     std::cout << "[" << frame->number << "/" << frames_count - 1 << "] "
-              << frame->image.width << "x" << frame->image.height << "x"
-              << frame->image.channels << " @ " << std::setw(10)
-              << frame->timestamp_s << "s [missed " << missed_frames << "]";
+              << VR_CYAN << frame->image.width << "x" << frame->image.height
+              << "x" << frame->image.channels << VR_RESET << " @ "
+              << std::setw(10) << VR_CYAN << frame->timestamp_s << "s"
+              << VR_RESET << " [missed " << missed_frames << "]";
     if (counter >= FPS_SZ) {
       double const real_fps =
           fps.size() / std::accumulate(fps.begin(), fps.end(), 0.0);
@@ -89,8 +131,9 @@ run(std::string const& url,
           std::chrono::high_resolution_clock::duration{});
       std::chrono::duration<double> duration_s = total_duration;
       double const read_fps = FPS_SZ / duration_s.count();
-      std::cout << " [real " << std::setw(7) << std::setprecision(2) << real_fps
-                << "fps / read " << std::setw(7) << read_fps << "fps]";
+      std::cout << " [real " << std::setw(7) << std::setprecision(2) << VR_CYAN
+                << real_fps << "fps" << VR_RESET << " / read " << std::setw(7)
+                << VR_CYAN << read_fps << "fps" << VR_RESET << ']';
     }
     std::cout << std::endl;
     ++counter;
@@ -103,6 +146,9 @@ int main(int argc, char** argv) {
     std::cout << "usage:" << argv[0]
               << " URL [PARAMETER VALUE] ... [--extras [EXTRAS]]\n";
     return 1;
+  }
+  if (!terminal_supports_colors()) {
+    disable_colors();
   }
   try {
     std::string const uri = std::string(argv[1]);
@@ -117,7 +163,7 @@ int main(int argc, char** argv) {
     }
     run(uri, parameter_pairs, extras);
   } catch (std::runtime_error& e) {
-    std::cerr << "EXCEPTION: " << e.what() << std::endl;
+    std::cerr << VR_RED << "EXCEPTION: " << e.what() << VR_RESET << '\n';
     return 1;
   }
   return 0;
