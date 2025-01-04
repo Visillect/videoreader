@@ -101,6 +101,13 @@ message(STATUS
   "CAPI[${VIDEOREADER_BUILD_CAPI}]"
 )
 
+add_executable(videoreader_go src/videoreader_go.cpp)
+target_link_libraries(videoreader_go PRIVATE videoreader)
+if(TARGET minviewer_client)
+  target_link_libraries(videoreader_go PRIVATE minviewer_client)
+  target_compile_definitions(videoreader_go PRIVATE USE_MINVIEWER_CLIENT)
+endif()
+
 if (VIDEOREADER_BUILD_CAPI)
   # we can expose C API from videoreader library itself, but
   # it can be any of type, so make sure we create a SHARED library
@@ -122,7 +129,7 @@ if (VIDEOREADER_BUILD_CAPI)
       )
       add_dependencies(videoreader_c videoreader_cffi)
 
-      install(TARGETS videoreader_c
+      install(TARGETS videoreader_c videoreader_go
         EXCLUDE_FROM_ALL
         COMPONENT python_modules
         DESTINATION ${PY_BUILD_CMAKE_IMPORT_NAME}
@@ -145,11 +152,4 @@ if(BUILD_TESTING)
   add_test(
     NAME test_videoreader
     COMMAND test_videoreader)
-endif()
-
-add_executable(videoreader_go src/videoreader_go.cpp)
-target_link_libraries(videoreader_go PRIVATE videoreader)
-if(TARGET minviewer_client)
-  target_link_libraries(videoreader_go PRIVATE minviewer_client)
-  target_compile_definitions(videoreader_go PRIVATE USE_MINVIEWER_CLIENT)
 endif()
