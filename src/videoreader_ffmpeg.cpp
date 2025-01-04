@@ -60,21 +60,35 @@ static AVFormatContextUP _get_format_context(
 This is a copy from libavformat/internal.h. Helps with logging big time.
 */
 struct DirtyHackFFStream {
+// I read the ffmpeg sources - there's no better way.
+// we just need to update the structure below as ffmpeg updates
+
+// 7.0 - 61.1.100
+// 6.0 - 60.3.100
+// 5.0 - 59.16.100
+// 4.0 - 58.12.100
+#if LIBAVFORMAT_VERSION_INT <= AV_VERSION_INT(61, 0, 0)
   int reorder;
   struct AVBSFContext* bsfc;
   int bitstream_checked;
   AVCodecContext* avctx;
+#else
+  AVFormatContext* fmtctx;
+  int reorder;
+  struct AVBSFContext* bsfc;
+  int bitstream_checked;
+  struct AVCodecContext* avctx;
+#endif
 };
 
 static AVStream* _get_video_stream(AVFormatContext* format_context) {
   for (unsigned stream_idx = 0; stream_idx < format_context->nb_streams;
        ++stream_idx) {
+    AVStream* stream = format_context->streams[stream_idx];
 #ifdef FF_API_AVIOFORMAT
-    reinterpret_cast<DirtyHackFFStream*>(
-        format_context->streams[stream_idx]->internal)
+    reinterpret_cast<DirtyHackFFStream*>(stream->internal)
 #else
-    reinterpret_cast<DirtyHackFFStream*>(
-        format_context->streams[stream_idx] + 1)
+    reinterpret_cast<DirtyHackFFStream*>(stream + 1)
 #endif
         ->avctx->opaque = format_context->opaque;
   }
@@ -84,8 +98,9 @@ static AVStream* _get_video_stream(AVFormatContext* format_context) {
   for (unsigned stream_idx = 0; stream_idx < format_context->nb_streams;
        ++stream_idx) {
     AVStream* av_stream = format_context->streams[stream_idx];
-    if (av_stream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO)
+    if (av_stream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
       return av_stream;
+    }
   }
   throw std::runtime_error("video steam not found");
 }
@@ -228,7 +243,12 @@ struct VideoReaderFFmpeg::Impl {
       print_prefix{1} {
     for (auto const& extra : extras) {
       if (extra == "pkt_pos") {
+#if LIBAVUTIL_VERSION_INT <= AV_VERSION_INT(56, 70, 100)
         this->pushers.emplace_back(&AVFrame::pkt_pos);
+#else
+        throw std::runtime_error(
+            "pkt_pos is deprecated in new versions of FFmpeg");
+#endif
       } else if (extra == "quality") {
         this->pushers.emplace_back(&AVFrame::quality);
       } else if (extra == "pts") {
@@ -455,7 +475,7 @@ static void videoreader_ffmpeg_callback(
   //   opaque = static_cast<SWScaler*>(avcl)->opaque;
   //   break;
   case 'L':  // URLContext
-    // Opaque struct. Ignore.
+    // Opaque struct that has no public interface. Ignore.
     break;
   }
   if (opaque == nullptr) {

@@ -37,7 +37,9 @@ using AVPacketUP = std::unique_ptr<AVPacket, AVPacketDeleter>;
 
 struct AVCodecContextDeleter {
   void operator()(AVCodecContext* ctx) const noexcept {
+#if LIBAVCODEC_VERSION_INT <= AV_VERSION_INT(58, 134, 100)  // ubuntu-22.04
     avcodec_close(ctx);
+#endif
     avcodec_free_context(&ctx);
   }
 };
