@@ -273,9 +273,12 @@ struct VideoReaderFFmpeg::Impl {
   }
 
   void read() {
-    // seeking to timestemt 0.0 helps prevent compression
-    // artifacts on broken videos
-    av_seek_frame(this->format_context.get(), -1, 0, AVSEEK_FLAG_ANY);
+    if (this->is_seekable()) {
+      // seeking to timestemp 0.0 helps prevent compression
+      // artifacts on broken videos. `av_seek_frame` is known to hang
+      // on streamed videos, so check `is_seekable` first
+      av_seek_frame(this->format_context.get(), -1, 0, AVSEEK_FLAG_ANY);
+    }
     while (!this->stop_requested) {
       AVPacketUP thread_packet(av_packet_alloc());
       int const read_ret =
