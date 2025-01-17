@@ -16,7 +16,6 @@ find_path(GALAXY_INCLUDE_DIR GxIAPI.h
   /usr/include
   /sw/include
   /opt/local/include
-  /opt/pylon/include
   /opt/include
   /mingw/include
 )
