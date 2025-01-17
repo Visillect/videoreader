@@ -5,7 +5,7 @@
 
 class VideoReader {
 public:
-  enum class SCALAR_TYPE : int32_t { U8 };
+  enum class SCALAR_TYPE : int32_t { U8, U16 };
   struct VRImage {
     int32_t height;
     int32_t width;

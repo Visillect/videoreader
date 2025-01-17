@@ -34,6 +34,7 @@ if (VIDEOREADER_CFFI)
   find_package(ffmpeg)
   find_package(galaxy)
   find_package(pylon)
+  find_package(idatum)
 endif()
 
 set(WITH_FFMPEG "OFF")
@@ -93,11 +94,23 @@ if (galaxy_FOUND)
   )
 endif()
 
+set(WITH_IDATUM "OFF")
+if (idatum_FOUND)
+  set(WITH_IDATUM "ON")
+  target_compile_definitions(videoreader PRIVATE VIDEOREADER_WITH_IDATUM)
+  target_link_libraries(videoreader PRIVATE idatum::idatum)
+  target_sources(videoreader PRIVATE
+    src/videoreader_idatum.cpp
+    src/videoreader_idatum.hpp
+  )
+endif()
+
 message(STATUS
   "videoreader: "
   "FFMPEG[${WITH_FFMPEG}] "
   "PYLON[${WITH_PYLON}] "
   "GALAXY[${WITH_GALAXY}] "
+  "IDATUM[${WITH_IDATUM}] "
   "CAPI[${VIDEOREADER_BUILD_CAPI}]"
 )
 
