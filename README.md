@@ -23,12 +23,17 @@ See [Findgalaxy.cmake](cmake/Findgalaxy.cmake) for exact logic of finding galaxy
 
 Download [pylon SDK](https://www.baslerweb.com/). Then set `PYLON_DIR` environment variable to the SDK directory. See [Findpylon.cmake](cmake/Findpylon.cmake) for exact logic of finding pylon SDK.
 
+### iDatum cameras (contrastech)
+
+Download [iDatum SDK](https://www.visiondatum.com/upfile/onlinedoc/LEO_Area_USB_EN.html). Then set `IDATUM_DIR` environment variable to the SDK directory. See [Findidatum.cmake](cmake/Findidatum.cmake) for exact logic of finding iDatum SDK.
+
 
 ### pip
 
 `pip install git+https://github.com/Visillect/videoreader`
 
-`FFMPEG_DIR=... GALAXY_DIR=... PYLON_DIR=... pip install git+https://github.com/Visillect/videoreader`
+When the SDKs aren't in default locations, the user can specify directories explicitly:
+`FFMPEG_DIR=... GALAXY_DIR=... PYLON_DIR=... IDATUM_DIR=... pip install git+https://github.com/Visillect/videoreader`
 
 
 ## Examples:

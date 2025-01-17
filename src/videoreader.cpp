@@ -13,8 +13,12 @@
 #include "videoreader_galaxy.hpp"
 #endif
 
+#ifdef VIDEOREADER_WITH_IDATUM
+#include "videoreader_idatum.hpp"
+#endif
+
 static void default_vr_allocate(VideoReader::VRImage* image, void* unused) {
-  std::size_t size = image->stride * image->height;
+  std::size_t const size = image->stride * image->height;
   image->data = new (std::nothrow) uint8_t[size];
 }
 
@@ -65,6 +69,18 @@ std::unique_ptr<VideoReader> VideoReader::create(
         userdata));
   }
 #endif
+#ifdef VIDEOREADER_WITH_IDATUM
+  if (url.find("idatum://") == 0) {
+    return std::unique_ptr<VideoReader>(new VideoReaderIDatum(
+        url,
+        parameter_pairs,
+        extras,
+        allocate_callback,
+        delallocate_callback,
+        log_callback,
+        userdata));
+  }
+#endif
 #ifdef VIDEOREADER_WITH_FFMPEG
   return std::unique_ptr<VideoReader>(new VideoReaderFFmpeg(
       url,
@@ -76,7 +92,7 @@ std::unique_ptr<VideoReader> VideoReader::create(
       userdata));
 #else
 #if !defined(VIDEOREADER_WITH_FFMPEG) && !defined(VIDEOREADER_WITH_PYLON) && \
-    !defined(VIDEOREADER_WITH_GALAXY)
+    !defined(VIDEOREADER_WITH_GALAXY) && !defined(VIDEOREADER_WITH_IDATUM)
   throw std::runtime_error("build without any video backed");
 #else
   throw std::runtime_error("unsupported uri");
