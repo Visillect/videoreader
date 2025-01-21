@@ -1,9 +1,11 @@
 [project]
 name = "videoreader"
-version = "0.0.2"
+dynamic = ["version"]
 authors = [
   { name="Arseniy Terekhin", email="senyai@gmail.com" },
 ]
+license = {text = "MIT"}
+readme = "README.md"
 description = "Video capture library"
 requires-python = ">=3.10"
 classifiers = [

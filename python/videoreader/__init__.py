@@ -4,6 +4,8 @@ from typing import Callable, Iterator, NoReturn, TypeAlias, Generic, TypeVar
 from ._videoreader import ffi
 from pathlib import Path
 
+__version__ = "0.0.3"
+
 
 path = str(Path(__file__).parent / "libvideoreader_c.so")
 try:
