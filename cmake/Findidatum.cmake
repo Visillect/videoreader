@@ -101,6 +101,7 @@ find_package_handle_standard_args(
 )
 
 if(IDATUM_FOUND AND NOT TARGET idatum)
+  get_filename_component(idatum_LINK_DIRECTORIES "${IDATUM_GCBase_LIBRARY}" DIRECTORY)
   add_library(idatum::GCBase UNKNOWN IMPORTED)
   set_target_properties(idatum::GCBase PROPERTIES
     IMPORTED_LOCATION "${IDATUM_GCBase_LIBRARY}"

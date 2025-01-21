@@ -134,6 +134,7 @@ mark_as_advanced(
 )
 
 if(ffmpeg_FOUND AND NOT TARGET ffmpeg::avcodec)
+  get_filename_component(ffmpeg_LINK_DIRECTORIES "${AVUTIL_LIBRARY}" DIRECTORY)
   add_library(ffmpeg::avutil UNKNOWN IMPORTED)
   set_target_properties(ffmpeg::avutil PROPERTIES
     IMPORTED_LOCATION "${AVUTIL_LIBRARY}"
