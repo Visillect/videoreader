@@ -53,8 +53,9 @@ find_package_handle_standard_args(
 )
 
 if(GALAXY_FOUND AND NOT TARGET galaxy)
-    add_library(galaxy UNKNOWN IMPORTED)
-    set_target_properties(galaxy PROPERTIES
-        IMPORTED_LOCATION "${GALAXY_GXI_LIBRARY}"
-        INTERFACE_INCLUDE_DIRECTORIES "${GALAXY_INCLUDE_DIR}")
+  get_filename_component(galaxy_LINK_DIRECTORIES "${GALAXY_GXI_LIBRARY}" DIRECTORY)
+  add_library(galaxy UNKNOWN IMPORTED)
+  set_target_properties(galaxy PROPERTIES
+    IMPORTED_LOCATION "${GALAXY_GXI_LIBRARY}"
+    INTERFACE_INCLUDE_DIRECTORIES "${GALAXY_INCLUDE_DIR}")
 endif()

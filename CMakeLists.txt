@@ -128,6 +128,19 @@ if (VIDEOREADER_BUILD_CAPI)
   target_link_libraries(videoreader_c PRIVATE videoreader videowriter)
 
   if (VIDEOREADER_CFFI)
+    if (WITH_FFMPEG)
+      set_property(TARGET videoreader_c APPEND PROPERTY INSTALL_RPATH "${ffmpeg_LINK_DIRECTORIES}")
+    endif()
+    if (WITH_IDATUM)
+      set_property(TARGET videoreader_c APPEND PROPERTY INSTALL_RPATH "${idatum_LINK_DIRECTORIES}")
+    endif()
+    if (WITH_PYLON)
+      set_property(TARGET videoreader_c APPEND PROPERTY INSTALL_RPATH "${pylon_LINK_DIRECTORIES}")
+    endif()
+    if (WITH_GALAXY)
+      set_property(TARGET videoreader_c APPEND PROPERTY INSTALL_RPATH "${galaxy_LINK_DIRECTORIES}")
+    endif()
+
     if (PY_BUILD_CMAKE_IMPORT_NAME)
       add_custom_command(
         OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/videoreader/_videoreader.py"

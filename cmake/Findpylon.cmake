@@ -89,6 +89,7 @@ find_package_handle_standard_args(
 )
 
 if(pylon_FOUND AND NOT TARGET pylon::pylon_base)
+  get_filename_component(pylon_LINK_DIRECTORIES "${PYLON_BASE_LIBRARY}" DIRECTORY)
   add_library(pylon::pylon_base UNKNOWN IMPORTED)
   set_target_properties(pylon::pylon_base PROPERTIES
     IMPORTED_LOCATION "${PYLON_BASE_LIBRARY}"
