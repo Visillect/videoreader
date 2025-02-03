@@ -78,8 +78,9 @@ struct VideoReaderPylon::Impl {
         std::lock_guard<SpinLock> guard(this->read_queue_lock);
         if (this->read_queue.size() > 10) {
           // cleanup queue
-          for (int i = 0; i < 8; ++i)
+          for (int i = 0; i < 8; ++i) {
             this->read_queue.pop_front();
+          }
         }
         this->read_queue.emplace_back(grabResult);
       }
@@ -101,7 +102,7 @@ struct VideoReaderPylon::Impl {
     }
     int32_t const width = static_cast<int32_t>(result->GetWidth());
     int32_t const height = static_cast<int32_t>(result->GetHeight());
-    int32_t alignment = 16;
+    int32_t const alignment = 16;
     int32_t const preferred_stride =
         (width * 3 + alignment - 1) & ~(alignment - 1);
 
