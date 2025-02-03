@@ -186,15 +186,32 @@ class VideoWriter:
             raise_error()
 
 
-def videoreader_n_frames(uri: str) -> int:
+def videoreader_n_frames(uri: str | Path) -> int:
     """
     Get number of frames in a file
     """
     handler = ffi.new("struct videoreader **")
-    backend.videoreader_create(
-        handler, uri.encode("utf-8"), [], 0, ffi.NULL, ffi.NULL
-    )
-    n_frames = ffi.new("uint64_t *")
-    backend.videoreader_size(handler[0], n_frames)
-    backend.videoreader_delete(handler[0])
+    if (
+        backend.videoreader_create(
+            handler,
+            str(uri).encode("utf-8"),
+            [],
+            0,
+            [],
+            0,
+            ffi.NULL,
+            ffi.NULL,
+            ffi.NULL,
+            ffi.NULL,
+        )
+        != 0
+    ):
+        raise_error()
+
+    handler = handler[0]
+    try:
+        n_frames = ffi.new("uint64_t *")
+        backend.videoreader_size(handler, n_frames)
+    finally:
+        backend.videoreader_delete(handler)
     return n_frames[0]
