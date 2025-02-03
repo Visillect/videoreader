@@ -95,9 +95,9 @@ class VideoReaderBase(Generic[T]):
                 if extras == ffi.NULL:
                     yield image, number[0], timestamp[0]
                 else:
-                    from msgpack import unpackb
-
                     try:
+                        from msgpack import unpackb
+
                         info = unpackb(ffi.buffer(extras, extras_size[0]))
                     finally:
                         backend.free(extras)
