@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-from typing import Callable, Iterator, NoReturn, TypeAlias, Generic, TypeVar
+from typing import Callable, Iterator, NoReturn, TypeAlias
 from ._videoreader import ffi
 from pathlib import Path
 
@@ -34,13 +34,10 @@ def raise_error() -> NoReturn:
     raise ValueError(ffi.string(backend.videoreader_what()).decode())
 
 
-T = TypeVar("T")
-
-
-class VideoReaderBase(Generic[T]):
+class VideoReaderBase:
     def __init__(
         self,
-        path: str,
+        path: str | Path,
         arguments: list[str] = [],
         extras: list[str] = [],
         alloc_callback: AllocCallback = ffi.NULL,
@@ -73,7 +70,9 @@ class VideoReaderBase(Generic[T]):
             raise_error()
         self._handler = ffi.gc(handler[0], backend.videoreader_delete)
 
-    def __iter__(self, decode: bool = True) -> Iterator[tuple[T, int, float]]:
+    def _iter(
+        self, decode: bool = True
+    ) -> "Iterator[tuple[ffi.CData, *tuple[int | float, ...]]]":
         number = ffi.new("uint64_t *")
         timestamp = ffi.new("double *")
         extras_p = ffi.new("unsigned char **")
@@ -135,14 +134,14 @@ class VideoReaderBase(Generic[T]):
             raise_error()
 
 
-class VideoWriter:
+class VideoWriterBase:
     def __init__(
         self,
         path: str,
         width: int,
         height: int,
         arguments: list[str] = [],
-        realtime=False,
+        realtime: bool = False,
         log_callback: Callable[[str, int], None] | None = None,
     ):
         handler = ffi.new("struct videowriter **")
@@ -175,7 +174,7 @@ class VideoWriter:
             raise_error()
         self._handler = ffi.gc(handler[0], backend.videowriter_delete)
 
-    def push(self, image: ffi.CData, timestamp: float) -> bool:
+    def _push(self, image: ffi.CData, timestamp: float) -> bool:
         ret: int = backend.videowriter_push(self._handler, image, timestamp)
         if ret < 0:
             raise_error()
