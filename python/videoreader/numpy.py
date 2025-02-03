@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import TypeAlias, Any
 import numpy as np
-from . import VideoReaderBase, ffi, LogCallback
+from . import VideoReaderBase, VideoWriterBase, ffi, LogCallback
 from collections.abc import Iterator
 
 
@@ -38,14 +38,14 @@ def free_callback_callback_numpy(image: ffi.CData, self: ffi.CData) -> None:
     assert address in ffi.from_handle(self).memory
 
 
-class VideoReaderNumpy(VideoReaderBase[Image]):
+class VideoReaderNumpy(VideoReaderBase):
     def __init__(
         self,
         path: str,
         arguments: list[str] = [],
         extras: list[str] = [],
         log_callback: LogCallback = None,
-    ):
+    ) -> None:
         self.memory: dict[int, Image] = {}
         super().__init__(
             path,
@@ -56,12 +56,33 @@ class VideoReaderNumpy(VideoReaderBase[Image]):
             log_callback,
         )
 
-    def __iter__(self) -> Iterator[tuple[Image, int, float]]:
-        for image, *other in super().__iter__():
+    def __iter__(self) -> "Iterator[tuple[Image, *tuple[int | float, ...]]]":
+        for image, *other in self._iter():
             address = int(ffi.cast("uintptr_t", image.data))
             yield (self.memory.pop(address), *other)
 
-    def __del__(self):
+    def __del__(self) -> None:
         if self.memory:
             print(f"something went wrong when using {self}")
         self.memory.clear()
+
+
+class VideoWriterNumpy(VideoWriterBase):
+    def push(self, image: Image, timestamp: float) -> bool:
+        height, width, channels = image.shape
+        if image.dtype != np.uint8:
+            raise ValueError(
+                f"Only uint8 image are supported, not {image.dtype}."
+            )
+        vr_image = ffi.new(
+            "VRImage *",
+            {
+                "width": width,
+                "height": height,
+                "channels": channels,
+                "scalar_type": 0,
+                "stride": width * channels,
+                "data": ffi.cast("uint8_t*", image.ctypes.data),
+            },
+        )
+        return self._push(vr_image, timestamp)

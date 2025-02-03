@@ -46,7 +46,9 @@ class VideoReaderMinImg(VideoReaderBase[MinImg]):
             log_callback,
         )
 
-    def __iter__(self) -> Iterator[tuple[MinImg, int, float]]:
+    def __iter__(
+        self,
+    ) -> "Iterator[tuple[ffi.CData, *tuple[int | float, ...]]]":
         for image, *other in super().__iter__():
             address = int(ffi.cast("uintptr_t", image.data))
             yield (self.memory.pop(address), *other)
