@@ -1,5 +1,7 @@
 *.pyc
 /build*/
+# python -m build . --wheel output
+/dist/
 # `kernprof` output
 *.lprof
 # temporary file for `line_profiler`
