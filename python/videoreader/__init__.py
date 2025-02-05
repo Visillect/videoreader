@@ -62,7 +62,7 @@ class VideoReaderBase:
                 len(extras_keepalive),
                 alloc_callback,
                 free_callback,
-                backend.videoreader_log if log_callback else ffi.NULL,
+                videoreader_log if log_callback else ffi.NULL,
                 self._self_handle,
             )
             != 0
