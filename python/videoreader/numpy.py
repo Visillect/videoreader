@@ -11,25 +11,21 @@ Image: TypeAlias = np.ndarray[Any, np.dtype[np.uint8]]
 @ffi.callback("void (VRImage*, void*)")
 def alloc_callback_numpy(image: ffi.CData, self: ffi.CData) -> None:
     assert image.scalar_type == 0, f"non uint8 images not yet supported"
-    if image.channels == 3:
-        arr = np.empty(
-            (image.height, image.width, image.channels), dtype=np.uint8
-        )
-        ai = arr.__array_interface__
-        address = ai["data"][0]
-        assert (
-            ai["strides"] is None
-        ), f"{image.height}x{image.width}x{image.channels} images not yet supported"
-        assert (
-            image.stride == arr.dtype.itemsize * image.width * image.channels
-        ), "unsupported image"
-        memory = ffi.from_handle(self).memory
-        image.data = ffi.cast("uint8_t *", address)
-        image.user_data = ffi.NULL
-        assert address not in memory, "programmer error"
-        memory[address] = arr
-    else:
-        assert False, f"{image.channels} channels not yet supported"
+    assert image.channels >= 1
+    arr = np.empty((image.height, image.width, image.channels), dtype=np.uint8)
+    ai = arr.__array_interface__
+    address = ai["data"][0]
+    assert (
+        ai["strides"] is None
+    ), f"{image.height}x{image.width}x{image.channels} images not yet supported"
+    assert (
+        image.stride == arr.dtype.itemsize * image.width * image.channels
+    ), "unsupported image"
+    memory = ffi.from_handle(self).memory
+    image.data = ffi.cast("uint8_t *", address)
+    image.user_data = ffi.NULL
+    assert address not in memory, "programmer error"
+    memory[address] = arr
 
 
 @ffi.callback("void (VRImage*, void*)")
