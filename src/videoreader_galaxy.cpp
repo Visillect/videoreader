@@ -586,10 +586,15 @@ struct VideoReaderGalaxy::Impl {
             frame->extras = stream.data();
             frame->extras_size = stream.size();
           }
+          VRImage* image = &frame->image;
+          (*this->allocate_callback)(image, this->userdata);
+          if (!image->data) {
+            throw std::runtime_error(
+                "allocation callback failed: data is nullptr");
+          }
 
-          auto const& img = frame->image;
           std::memcpy(
-              img.data, buffer->pImgBuf, buffer->nWidth * buffer->nHeight);
+              image->data, buffer->pImgBuf, buffer->nWidth * buffer->nHeight);
           {
             std::lock_guard<SpinLock> guard(this->read_queue_lock);
             if (this->read_queue.size() > 9) {
