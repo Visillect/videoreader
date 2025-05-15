@@ -93,7 +93,7 @@ std::unique_ptr<VideoReader> VideoReader::create(
 #else
 #if !defined(VIDEOREADER_WITH_FFMPEG) && !defined(VIDEOREADER_WITH_PYLON) && \
     !defined(VIDEOREADER_WITH_GALAXY) && !defined(VIDEOREADER_WITH_IDATUM)
-  throw std::runtime_error("build without any video backed");
+  throw std::runtime_error("build without any video backend");
 #else
   throw std::runtime_error("unsupported uri");
 #endif
