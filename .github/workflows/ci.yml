@@ -17,7 +17,7 @@ jobs:
           python-version: '3.10'
           cache: 'pip'
       - run: pip install -r python/requirements.txt
-      - uses: psf/black@stable
+      - uses: psf/black@25.1.0
       - name: 'clang-format'
         run: |
           find src include -name '*.cpp' -o -name '*.h' -o -name '*.hpp' | xargs clang-format --Werror -n
@@ -30,3 +30,18 @@ jobs:
         run: |
           pip install build
           python -m build . --wheel
+
+  windows:
+    name: Win32
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1.13.0
+      - name: Setup cmake
+        uses: jwlawson/actions-setup-cmake@v2
+        with:
+          cmake-version: '3.17.x'
+      - name: Configure
+        run: cmake . -B build
+      - name: Build
+        run: cmake --build build --config Release
