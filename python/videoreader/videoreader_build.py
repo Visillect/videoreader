@@ -1,5 +1,8 @@
 from __future__ import annotations
+import sys
+from pathlib import Path
 from cffi import FFI
+
 
 ffibuilder = FFI()
 ffibuilder.set_source("videoreader._videoreader", None)
@@ -77,4 +80,19 @@ void free(void *p);  // for cleaning up "extras"
 )
 
 if __name__ == "__main__":
-    ffibuilder.compile(verbose=True)
+    py_file = Path(ffibuilder.compile(verbose=True))
+    libname = (
+        "libvideoreader_c.so"
+        if sys.platform != "win32"
+        else "videoreader_c.dll"
+    )
+    with py_file.open("a", encoding="utf-8") as out:
+        print(
+            f"""
+from pathlib import Path
+
+def open_backend():
+    path = str(Path(__file__).parent / {libname!r})
+    return ffi.dlopen(path)""",
+            file=out,
+        )

@@ -11,7 +11,9 @@
 #endif
 static bool ctrl_c = false;
 #ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
+#undef ERROR
 
 BOOL WINAPI consoleHandler(DWORD signal) {
   if (signal == CTRL_C_EVENT || signal == CTRL_BREAK_EVENT ||

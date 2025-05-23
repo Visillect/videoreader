@@ -2,7 +2,12 @@
 #include <videoreader/videoreader.hpp>
 #include <videoreader/videowriter.hpp>
 
+#ifndef _MSC_VER
 #define API extern "C"
+#else
+#define API extern "C" __declspec(dllexport)
+#endif
+
 using videoreader_log = void (*)(char const*, int, void*);
 using videoreader_allocate = void (*)(char const*);
 
