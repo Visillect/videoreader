@@ -19,5 +19,5 @@ public:
 private:
   struct Impl;
   std::unique_ptr<struct Impl> impl;
-  ~VideoReaderGalaxy();
+  ~VideoReaderGalaxy() override;
 };
