@@ -54,8 +54,39 @@ static AVFormatContextUP _get_format_context(
 
   options.reset(opts);
   if (ret < 0) {
-    throw std::runtime_error(
-        "Can't open `" + filename + "`, " + get_av_error(ret));
+    std::string error = get_av_error(ret);
+    if (ret == AVERROR_PROTOCOL_NOT_FOUND) {
+      const AVInputFormat* input_fmt = NULL;
+      const AVOutputFormat* output_fmt = NULL;
+      void* opaque = NULL;
+
+      error += " (available:"
+#ifdef VIDEOREADER_WITH_PYLON
+               " pylon://"
+#endif
+#ifdef VIDEOREADER_WITH_GALAXY
+               " galaxy://"
+#endif
+#ifdef VIDEOREADER_WITH_IDATUM
+               " idatum://"
+#endif
+          ;
+      while ((input_fmt = av_demuxer_iterate(&opaque))) {
+        if (input_fmt->priv_class && input_fmt->priv_class->category ==
+                                         AV_CLASS_CATEGORY_DEVICE_VIDEO_INPUT) {
+          std::string const name = std::string(input_fmt->name);
+          std::size_t const comma_idx = name.find(",");
+          if (comma_idx == std::string::npos) {
+            error += " " + name + "://";
+          } else {
+            error += " " + name.substr(0, comma_idx) + ":// " +
+                     name.substr(comma_idx + 1) + "://";
+          }
+        }
+      }
+      error += ")";
+    }
+    throw std::runtime_error("Can't open `" + filename + "`, " + error);
   }
   return AVFormatContextUP(format_context);
 }
