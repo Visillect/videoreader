@@ -17,6 +17,7 @@ extern "C" {
 #include "spinlock.hpp"
 #include "thismsgpack.hpp"
 #include <atomic>
+#include <condition_variable>
 #include <deque>
 #include <mutex>
 #include <stdexcept>  // std::runtime_error
@@ -253,6 +254,7 @@ struct VideoReaderFFmpeg::Impl {
   std::thread read_thread;  // for network to work
   std::deque<AVPacket*> read_queue;  // read buffer
   SpinLock read_queue_lock;
+  std::condition_variable_any cv;
   AVPacket* pop_packet();
 
   int print_prefix;
@@ -338,12 +340,12 @@ struct VideoReaderFFmpeg::Impl {
       AVPacketUP thread_packet(av_packet_alloc());
       int const read_ret =
           av_read_frame(this->format_context.get(), thread_packet.get());
-      if (read_ret < 0) {  // error occured
+      if (read_ret < 0) {  // error occurred
         {  // unrecoverable error. exit the thread
           std::lock_guard<SpinLock> guard(this->read_queue_lock);
           this->read_queue.push_back(nullptr);
         }
-        // this->queue_updated.notify_one();
+        this->cv.notify_one();
         return;
       }
       if (thread_packet->stream_index == this->av_stream->index) {
@@ -372,7 +374,7 @@ struct VideoReaderFFmpeg::Impl {
           std::lock_guard<SpinLock> guard(this->read_queue_lock);
           this->read_queue.push_back(thread_packet.release());
         }
-        //this->queue_updated.notify_one();
+        this->cv.notify_one();
       }
     }
   }
@@ -575,18 +577,13 @@ VideoReader::Frame::number_t VideoReaderFFmpeg::size() const {
 }
 
 AVPacket* VideoReaderFFmpeg::Impl::pop_packet() {
-  while (true) {
-    this->read_queue_lock.lock();
-    if (this->read_queue.empty()) {
-      this->read_queue_lock.unlock();
-      std::this_thread::yield();
-    } else {
-      AVPacket* ret = this->read_queue.front();
-      this->read_queue.pop_front();
-      this->read_queue_lock.unlock();
-      return ret;
-    }
-  }
+  this->cv.wait(this->read_queue_lock, [&] {
+    return !this->read_queue.empty();
+  });
+  AVPacket* ret = this->read_queue.front();
+  this->read_queue.pop_front();
+  this->read_queue_lock.unlock();
+  return ret;
 }
 
 VideoReaderFFmpeg::~VideoReaderFFmpeg() {
