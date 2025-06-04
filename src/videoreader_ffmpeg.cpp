@@ -27,9 +27,13 @@ static AVFormatContextUP _get_format_context(
     std::string const& filename, AVDictionaryUP& options, void* opaque) {
   AVInputFormat const* input_format = nullptr;
   std::string path_to_use = filename;
-  if (filename.find("dshow://") == 0) {
-    input_format = av_find_input_format("dshow");
-    path_to_use = filename.substr(8, filename.size());
+  std::size_t const protocol_idx = filename.find("://");
+  if (protocol_idx != std::string::npos) {
+    std::string const protocol = filename.substr(0, protocol_idx);
+    input_format = av_find_input_format(protocol.c_str());
+    if (input_format != nullptr) {
+      path_to_use = filename.substr(protocol_idx + 3);
+    }
   }
   AVFormatContext* format_context = avformat_alloc_context();
   if (format_context == nullptr) {
