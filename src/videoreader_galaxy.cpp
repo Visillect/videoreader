@@ -4,6 +4,7 @@
 #include <GxIAPI.h>
 #include <algorithm>  // std::transform
 #include <atomic>
+#include <condition_variable>
 #include <cstring>
 #include <deque>
 #include <mutex>
@@ -374,6 +375,7 @@ struct VideoReaderGalaxy::Impl {
   std::deque<FrameUP> read_queue;
   std::atomic<bool> stop_requested;
   SpinLock read_queue_lock;
+  std::condition_variable_any cv;
   std::thread thread;
   std::exception_ptr exception;
   std::vector<DoublePusher> pushers;
@@ -497,7 +499,7 @@ struct VideoReaderGalaxy::Impl {
     }
   }
 
-  void read() {
+  void read() noexcept {
     // https://github.com/JerryAuas/RmEverTo2022/blob/6ca1c2f6d94934d8a1296f3ad45b9cc327b7fa9b/Sources/armordetect1.cpp#L205
     try {
       uint32_t const TIMEOUT_MS = 250;
@@ -602,6 +604,7 @@ struct VideoReaderGalaxy::Impl {
             }
             this->read_queue.emplace_back(std::move(frame));
           }
+          this->cv.notify_one();
         }
         GXQAllBufs(this->handle);
       }
@@ -611,21 +614,16 @@ struct VideoReaderGalaxy::Impl {
     }
   }
   FrameUP pop_grab_result() {
-    while (true) {
-      std::lock_guard<SpinLock> guard(this->read_queue_lock);
-      if (this->read_queue.empty()) {
-        if (this->stop_requested) {
-          break;
-        }
-        this->read_queue_lock.unlock();
-        std::this_thread::yield();
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
-        continue;
-      }
+    this->cv.wait(this->read_queue_lock, [&] {
+      return !this->read_queue.empty() || this->stop_requested;
+    });
+    if (!this->stop_requested) {
       auto ret = std::move(this->read_queue.front());
       this->read_queue.pop_front();
+      this->read_queue_lock.unlock();
       return ret;
     }
+    this->read_queue_lock.unlock();
     if (this->thread.joinable()) {
       this->thread.join();
     }
