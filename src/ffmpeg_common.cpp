@@ -26,3 +26,66 @@ std::string get_av_error(int const errnum) {
   }
   return ret;
 }
+
+void videoreader_ffmpeg_callback(
+    void* avcl, int level, const char* fmt, va_list vl) {
+  if (!avcl) {
+    return;  // can't access userdata (opaque)
+  }
+  if (level > av_log_get_level()) {
+    return;
+  }
+  AVClass* avc = *(AVClass**)avcl;
+  // possible class names:
+  // * AVFormatContext
+  // * AVCodecContext
+  // * AVIOContext
+  // * SWResampler
+  // * SWScaler
+  // * URLContext
+
+  void* opaque = nullptr;
+  switch (avc->class_name[2]) {
+  case 'F':  // AVFormatContext
+    opaque = static_cast<AVFormatContext*>(avcl)->opaque;
+    break;
+  case 'C':  // AVCodecContext
+    opaque = static_cast<AVCodecContext*>(avcl)->opaque;
+    break;
+  case 'I':  // AVIOContext
+    opaque = static_cast<AVIOContext*>(avcl)->opaque;
+    break;
+  // case 'R': // SWResampler
+  //   opaque = static_cast<SWResampler*>(avcl)->opaque;
+  //   break;
+  // case 'S': // SWScaler
+  //   opaque = static_cast<SWScaler*>(avcl)->opaque;
+  //   break;
+  case 'L':  // URLContext
+    // Opaque struct that has no public interface. Ignore.
+    break;
+  }
+  if (opaque == nullptr) {
+    return;
+  }
+  auto* const impl = reinterpret_cast<FFmpegLogInfo*>(opaque);
+  VideoReader::LogLevel const vr_level = [level] {
+    if (level <= AV_LOG_FATAL) {
+      return VideoReader::LogLevel::FATAL;
+    }
+    if (level <= AV_LOG_ERROR) {
+      return VideoReader::LogLevel::ERROR;
+    }
+    if (level <= AV_LOG_WARNING) {
+      return VideoReader::LogLevel::WARNING;
+    }
+    if (level <= AV_LOG_INFO) {
+      return VideoReader::LogLevel::INFO;
+    }
+    return VideoReader::LogLevel::DEBUG;
+  }();
+  char message[2048];
+  av_log_format_line(
+      avcl, level, fmt, vl, message, sizeof(message), &impl->print_prefix);
+  impl->log_callback(message, vr_level, impl->userdata);
+}
