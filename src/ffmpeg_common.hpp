@@ -8,6 +8,7 @@ extern "C" {
 #include <memory>
 #include <string>
 #include <vector>
+#include <videoreader/videoreader.hpp>
 
 struct AVDictionaryDeleter {
   void operator()(AVDictionary* av_dictionary) const noexcept {
@@ -60,3 +61,19 @@ struct AVFormatContextDeleter {
 };
 using AVFormatContextUP =
     std::unique_ptr<AVFormatContext, AVFormatContextDeleter>;
+
+void videoreader_ffmpeg_callback(
+    void* avcl, int level, const char* fmt, va_list vl);
+
+struct FFmpegLogInfo {
+  VideoReader::LogCallback log_callback;
+  void* userdata;
+  int print_prefix;
+
+  FFmpegLogInfo(
+      VideoReader::LogCallback log_callback, void* userdata, int print_prefix) :
+      log_callback{log_callback},
+      userdata{userdata},
+      print_prefix{print_prefix} {
+  }
+};

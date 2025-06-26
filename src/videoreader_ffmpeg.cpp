@@ -25,7 +25,9 @@ extern "C" {
 #include <vector>
 
 static AVFormatContextUP _get_format_context(
-    std::string const& filename, AVDictionaryUP& options, void* opaque) {
+    std::string const& filename,
+    AVDictionaryUP& options,
+    FFmpegLogInfo* opaque) {
   AVInputFormat const* input_format = nullptr;
   std::string path_to_use = filename;
   std::size_t const protocol_idx = filename.find("://");
@@ -144,7 +146,7 @@ static AVStream* _get_video_stream(AVFormatContext* format_context) {
 static AVCodecContextUP _get_codec_context(
     AVCodecParameters const* av_codecpar,
     AVDictionaryUP& options,
-    void* opaque) {
+    FFmpegLogInfo* opaque) {
   AVCodec const* av_codec = avcodec_find_decoder(av_codecpar->codec_id);
   if (!av_codec) {
     throw std::runtime_error("Unsupported codec");
@@ -257,12 +259,10 @@ struct VideoReaderFFmpeg::Impl {
   std::condition_variable_any cv;
   AVPacket* pop_packet();
 
-  int print_prefix;
   std::vector<AVFramePusher> pushers;
   AllocateCallback allocate_callback;
   DeallocateCallback deallocate_callback;
-  VideoReader::LogCallback log_callback;
-  void* userdata;
+  FFmpegLogInfo log_info;
 
   Impl(
       std::string const& url,
@@ -275,9 +275,7 @@ struct VideoReaderFFmpeg::Impl {
       stop_requested(false),
       allocate_callback{allocate_callback},
       deallocate_callback{deallocate_callback},
-      userdata{userdata},
-      log_callback{log_callback},
-      print_prefix{1} {
+      log_info{log_callback, userdata, 1} {
     for (auto const& extra : extras) {
       if (extra == "pkt_pos") {
 #if LIBAVUTIL_VERSION_INT <= AV_VERSION_INT(56, 70, 100)
@@ -300,10 +298,10 @@ struct VideoReaderFFmpeg::Impl {
       }
     }
     AVDictionaryUP options = _create_dict_from_params_vec(parameter_pairs);
-    this->format_context = _get_format_context(url, options, this);
+    this->format_context = _get_format_context(url, options, &this->log_info);
     this->av_stream = _get_video_stream(format_context.get());
     this->codec_context =
-        _get_codec_context(av_stream->codecpar, options, this);
+        _get_codec_context(av_stream->codecpar, options, &this->log_info);
     this->av_frame = AVFrameUP(av_frame_alloc());
     if (this->codec_context->pix_fmt != AV_PIX_FMT_NONE) {
       this->sws_context = _create_converter(
@@ -425,7 +423,7 @@ struct VideoReaderFFmpeg::Impl {
 
         FrameUP ret(new Frame(
             this->deallocate_callback,
-            this->userdata,
+            this->log_info.userdata,
             {
                 this->codec_context->height,  // height
                 this->codec_context->width,  // width
@@ -439,7 +437,7 @@ struct VideoReaderFFmpeg::Impl {
             timestamp_s));
         VRImage* image = &ret->image;
 
-        (*this->allocate_callback)(image, this->userdata);
+        (*this->allocate_callback)(image, this->log_info.userdata);
         if (!image->data) {
           throw std::runtime_error(
               "allocation callback failed: data is nullptr");
@@ -477,7 +475,7 @@ struct VideoReaderFFmpeg::Impl {
   }
 };
 
-static void videoreader_ffmpeg_callback(
+void videoreader_ffmpeg_callback(
     void* avcl, int level, const char* fmt, va_list vl) {
   if (!avcl) {
     return;  // can't access userdata (opaque)
@@ -518,7 +516,7 @@ static void videoreader_ffmpeg_callback(
   if (opaque == nullptr) {
     return;
   }
-  auto* const impl = reinterpret_cast<VideoReaderFFmpeg::Impl*>(opaque);
+  auto* const impl = reinterpret_cast<FFmpegLogInfo*>(opaque);
   VideoReader::LogLevel const vr_level = [level] {
     if (level <= AV_LOG_FATAL) {
       return VideoReader::LogLevel::FATAL;

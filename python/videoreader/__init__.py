@@ -154,6 +154,8 @@ class VideoWriterBase:
                 "scalar_type": 0,
             },
         )
+        self._self_handle = ffi.new_handle(self)
+
         if (
             backend.videowriter_create(
                 handler,
@@ -163,7 +165,7 @@ class VideoWriterBase:
                 len(argv_keepalive),
                 realtime,
                 videoreader_log if log_callback else ffi.NULL,
-                ffi.new_handle(self),
+                self._self_handle,
             )
             != 0
         ):
