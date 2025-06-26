@@ -55,8 +55,12 @@ struct VideoWriter::Impl {
   std::condition_variable cv;
   std::mutex m;
   std::exception_ptr exception;
+  FFmpegLogInfo log_info;
 
-  Impl(bool realtime) : pkt(av_packet_alloc()), realtime{realtime} {
+  Impl(bool realtime, VideoReader::LogCallback log_callback, void* userdata) :
+      pkt(av_packet_alloc()),
+      realtime{realtime},
+      log_info{log_callback, userdata, 1} {
   }
 
   void send_frame(AVFrame* frame) {
@@ -209,7 +213,10 @@ VideoWriter::VideoWriter(
     bool realtime,
     VideoReader::LogCallback log_callback,
     void* userdata) :
-    impl{new Impl(realtime)} {
+    impl{new Impl(realtime, log_callback, userdata)} {
+  if (log_callback != nullptr) {
+    av_log_set_callback(videoreader_ffmpeg_callback);
+  }
   this->impl->sws_ctx.reset(sws_getContext(
       format.width,
       format.height,
@@ -268,6 +275,7 @@ VideoWriter::VideoWriter(
   if (!c) {
     throw std::runtime_error("avcodec_alloc_context3() failed");
   }
+  c->opaque = &this->impl->log_info;
   this->impl->enc.reset(c);
 
   auto options = _create_dict_from_params_vec(parameter_pairs);
