@@ -15,6 +15,7 @@ public:
   VideoReader::FrameUP next_frame(bool decode) override;
   VideoReader::Frame::number_t size() const override;
   void set(std::vector<std::string> const& parameter_pairs) override;
+  void stop() override;
 
 private:
   struct Impl;

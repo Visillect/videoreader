@@ -59,7 +59,7 @@ class VideoReaderNumpy(VideoReaderBase):
 
     def __del__(self) -> None:
         if self.memory:
-            print(f"something went wrong when using {self}")
+            print(f"{len(self.memory)} items were left allocated in {self}")
         self.memory.clear()
 
 
