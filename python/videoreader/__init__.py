@@ -4,7 +4,7 @@ from typing import Callable, Iterator, NoReturn, TypeAlias
 from ._videoreader import ffi, open_backend
 from pathlib import Path
 
-__version__ = "0.0.7"
+__version__ = "0.0.8"
 
 
 backend = open_backend()
@@ -127,6 +127,10 @@ class VideoReaderBase:
         if backend.videoreader_set(
             self._handler, argv_keepalive, len(argv_keepalive)
         ):
+            raise_error()
+
+    def stop(self):
+        if backend.videoreader_stop(self._handler):
             raise_error()
 
 
