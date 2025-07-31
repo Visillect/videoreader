@@ -378,7 +378,7 @@ struct VideoReaderFFmpeg::Impl {
   }
 
   VideoReader::FrameUP next_frame(bool decode) {
-    while (true) {
+    while (!this->stop_requested) {
       AVPacket* raw_packet = this->pop_packet();
       if (reinterpret_cast<uintptr_t>(raw_packet) <= 1) {
         if (raw_packet == nullptr) {
@@ -513,17 +513,27 @@ VideoReader::Frame::number_t VideoReaderFFmpeg::size() const {
 
 AVPacket* VideoReaderFFmpeg::Impl::pop_packet() {
   this->cv.wait(this->read_queue_lock, [&] {
-    return !this->read_queue.empty();
+    return !this->read_queue.empty() || this->stop_requested;
   });
-  AVPacket* ret = this->read_queue.front();
-  this->read_queue.pop_front();
-  this->read_queue_lock.unlock();
-  return ret;
+  if (!this->stop_requested) {
+    AVPacket* ret = this->read_queue.front();
+    this->read_queue.pop_front();
+    this->read_queue_lock.unlock();
+    return ret;
+  }
+  return nullptr;
+}
+
+void VideoReaderFFmpeg::stop() {
+  this->impl->stop_requested = true;
+  this->impl->cv.notify_one();
 }
 
 VideoReaderFFmpeg::~VideoReaderFFmpeg() {
-  this->impl->stop_requested = true;
-  this->impl->read_thread.join();
+  this->stop();
+  if (this->impl->read_thread.joinable()) {
+    this->impl->read_thread.join();
+  }
 }
 
 VideoReader::FrameUP VideoReaderFFmpeg::next_frame(bool decode) {

@@ -81,6 +81,16 @@ videoreader_set(struct videoreader* reader, char const* argv[], int argc) {
   return 0;
 }
 
+API int videoreader_stop(struct videoreader* reader) {
+  try {
+    reinterpret_cast<VideoReader*>(reader)->stop();
+  } catch (std::exception& e) {
+    videoreader_what_str = e.what();
+    return -1;
+  }
+  return 0;
+}
+
 API void videoreader_delete(struct videoreader* reader) {
   delete reinterpret_cast<VideoReader*>(reader);
 }

@@ -14,6 +14,7 @@ public:
   bool is_seekable() const override;
   FrameUP next_frame(bool decode) override;
   Frame::number_t size() const override;
+  void stop() override;
 
   struct Impl;
   std::unique_ptr<struct Impl> impl;

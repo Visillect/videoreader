@@ -52,6 +52,8 @@ int videoreader_set(
     int argc
 );
 
+int videoreader_stop(struct videoreader*);
+
 int videoreader_size(struct videoreader*, uint64_t* count);
 
 // writer

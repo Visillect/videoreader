@@ -108,4 +108,9 @@ public:
   //         the result will be a valid frame with uinitialized pixel values)
   // frame data are read in a separate thread
   virtual FrameUP next_frame(bool decode = true) = 0;
+
+  // `next_frame` method locks, but one can call `stop` from
+  // another thread to request reading to terminate.
+  // Automatically called from destructor
+  virtual void stop() = 0;
 };

@@ -632,6 +632,11 @@ struct VideoReaderGalaxy::Impl {
     }
     return nullptr;
   }
+
+  void stop() {
+    this->stop_requested = true;
+    this->cv.notify_one();
+  }
 };
 
 VideoReaderGalaxy::VideoReaderGalaxy(
@@ -694,8 +699,12 @@ void VideoReaderGalaxy::set(std::vector<std::string> const& parameter_pairs) {
   this->impl->set(parameter_pairs);
 }
 
+void VideoReaderGalaxy::stop() {
+  this->impl->stop();
+}
+
 VideoReaderGalaxy::~VideoReaderGalaxy() {
-  this->impl->stop_requested = true;
+  this->stop();
   if (this->impl->thread.joinable()) {
     this->impl->thread.join();
   }
