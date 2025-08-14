@@ -5,7 +5,7 @@ from ._videoreader import ffi, open_backend
 from cffi import FFI
 from pathlib import Path
 
-__version__ = "0.0.8"
+__version__ = "0.0.9"
 
 
 backend = open_backend()
