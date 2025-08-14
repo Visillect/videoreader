@@ -13,7 +13,7 @@ backend = open_backend()
 @ffi.callback("void(char const*, int, void*)")
 def videoreader_log(message: ffi.CData, level: int, handler: ffi.CData):
     message = ffi.string(message).decode()
-    ffi.from_handle(handler).log_callback(level, message)
+    ffi.from_handle(handler).log_callback(message, level)
 
 
 FATAL = 0
