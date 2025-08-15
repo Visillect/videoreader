@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 from typing import Callable, Iterator, NoReturn, TypeAlias
-from ._videoreader import ffi, open_backend
-from cffi import FFI
+from ._videoreader import ffi, open_backend, CData
 from pathlib import Path
 
 __version__ = "0.0.9"
@@ -12,7 +11,7 @@ backend = open_backend()
 
 
 @ffi.callback("void(char const*, int, void*)")
-def videoreader_log(message: FFI.CData, level: int, handler: FFI.CData):
+def videoreader_log(message: CData, level: int, handler: CData):
     message = ffi.string(message).decode()
     ffi.from_handle(handler).log_callback(message, level)
 
@@ -24,7 +23,7 @@ INFO = 3
 DEBUG = 4
 
 LogCallback: TypeAlias = Callable[[str, int], None] | None
-AllocCallback: TypeAlias = Callable[[FFI.CData, FFI.CData], None] | None
+AllocCallback: TypeAlias = Callable[[CData, CData], None] | None
 
 
 def raise_error() -> NoReturn:
@@ -69,7 +68,7 @@ class VideoReaderBase:
 
     def _iter(
         self, decode: bool = True
-    ) -> "Iterator[tuple[FFI.CData, *tuple[int | float, ...]]]":
+    ) -> "Iterator[tuple[CData, *tuple[int | float, ...]]]":
         number = ffi.new("uint64_t *")
         timestamp = ffi.new("double *")
         extras_p = ffi.new("unsigned char **")
@@ -177,7 +176,7 @@ class VideoWriterBase:
             raise_error()
         self._handler = ffi.gc(handler[0], backend.videowriter_delete)
 
-    def _push(self, image: FFI.CData, timestamp: float) -> bool:
+    def _push(self, image: CData, timestamp: float) -> bool:
         ret: int = backend.videowriter_push(self._handler, image, timestamp)
         if ret < 0:
             raise_error()
