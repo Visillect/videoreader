@@ -91,6 +91,7 @@ if __name__ == "__main__":
     with py_file.open("a", encoding="utf-8") as out:
         print(
             f"""
+CData = ffi.CData
 from pathlib import Path
 
 def open_backend():

@@ -1,16 +1,15 @@
 from __future__ import annotations
 from typing import TypeAlias, Any
 import numpy as np
-from . import VideoReaderBase, VideoWriterBase, ffi, LogCallback
+from . import VideoReaderBase, VideoWriterBase, ffi, LogCallback, CData
 from collections.abc import Iterator
-from cffi import FFI
 
 
 Image: TypeAlias = np.ndarray[Any, np.dtype[np.uint8]]
 
 
 @ffi.callback("void (VRImage*, void*)")
-def alloc_callback_numpy(image: FFI.CData, self: FFI.CData) -> None:
+def alloc_callback_numpy(image: CData, self: CData) -> None:
     assert image.scalar_type == 0, f"non uint8 images not yet supported"
     assert image.channels >= 1
     arr = np.empty((image.height, image.width, image.channels), dtype=np.uint8)
@@ -30,7 +29,7 @@ def alloc_callback_numpy(image: FFI.CData, self: FFI.CData) -> None:
 
 
 @ffi.callback("void (VRImage*, void*)")
-def free_callback_callback_numpy(image: FFI.CData, self: FFI.CData) -> None:
+def free_callback_callback_numpy(image: CData, self: CData) -> None:
     address = int(ffi.cast("uintptr_t", image.data))
     assert address in ffi.from_handle(self).memory
 

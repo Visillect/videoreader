@@ -3,14 +3,13 @@ Backend for proprietary "minimg" library
 """
 
 from __future__ import annotations
-from . import VideoReaderBase, ffi, LogCallback
+from . import VideoReaderBase, ffi, LogCallback, CData
 from collections.abc import Iterator
 from minimg import MinImg, TYP_UINT8
-from cffi import FFI
 
 
 @ffi.callback("void (VRImage*, void*)")
-def alloc_callback_numpy(image: FFI.CData, self: FFI.CData) -> None:
+def alloc_callback_numpy(image: CData, self: CData) -> None:
     assert image.scalar_type == 0, f"non uint8 images not yet supported"
     img = MinImg.empty(
         image.width, image.height, image.channels, mintype=TYP_UINT8
@@ -24,7 +23,7 @@ def alloc_callback_numpy(image: FFI.CData, self: FFI.CData) -> None:
 
 
 @ffi.callback("void (VRImage*, void*)")
-def free_callback_callback_numpy(image: FFI.CData, self: FFI.CData) -> None:
+def free_callback_callback_numpy(image: CData, self: CData) -> None:
     address = int(ffi.cast("uintptr_t", image.data))
     assert address in ffi.from_handle(self).memory
 
@@ -49,7 +48,7 @@ class VideoReaderMinImg(VideoReaderBase[MinImg]):
 
     def __iter__(
         self,
-    ) -> "Iterator[tuple[FFI.CData, *tuple[int | float, ...]]]":
+    ) -> "Iterator[tuple[CData, *tuple[int | float, ...]]]":
         for image, *other in super().__iter__():
             address = int(ffi.cast("uintptr_t", image.data))
             yield (self.memory.pop(address), *other)
