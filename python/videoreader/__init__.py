@@ -4,7 +4,7 @@ from typing import Callable, Iterator, NoReturn, TypeAlias
 from ._videoreader import ffi, open_backend, CData
 from pathlib import Path
 
-__version__ = "0.0.9"
+__version__ = "0.0.10"
 
 
 backend = open_backend()
