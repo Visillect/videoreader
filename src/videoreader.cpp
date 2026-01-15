@@ -46,7 +46,7 @@ std::unique_ptr<VideoReader> VideoReader::create(
   }
 
 #ifdef VIDEOREADER_WITH_PYLON
-  if (url == "pylon") {
+  if (url.find("pylon://") == 0) {
     return std::unique_ptr<VideoReader>(new VideoReaderPylon(
         url,
         parameter_pairs,
