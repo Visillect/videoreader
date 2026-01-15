@@ -5,6 +5,7 @@
         "CAPI",
         "cffi",
         "Daheng",
+        "Numpy",
         "Terekhin",
         "videoreader",
         "videowriter"
