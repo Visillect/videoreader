@@ -409,7 +409,11 @@ struct VideoReaderGalaxy::Impl {
       }
     }
     int64_t out{};
-    GALAXY_CHECK(GXGetInt(handle, GX_INT_TIMESTAMP_TICK_FREQUENCY, &out));
+    if (GXGetInt(handle, GX_INT_TIMESTAMP_TICK_FREQUENCY, &out) !=
+        GX_STATUS_SUCCESS) {
+      // I have a camera that does not support Tick Frequency, but has it
+      out = 50000000;
+    }
     this->timestamp_tick_frequency = static_cast<double>(out);
     this->set(parameter_pairs);
 
