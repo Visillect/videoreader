@@ -1,7 +1,8 @@
 #pragma once
-#include <memory>
-#include <string>
-#include <vector>
+#include <cstdint>  // uint8_t
+#include <memory>  // std::unique_ptr
+#include <string>  // std::string
+#include <vector>  // std::vector
 
 class VideoReader {
 public:
