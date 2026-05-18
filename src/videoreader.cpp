@@ -95,7 +95,7 @@ std::unique_ptr<VideoReader> VideoReader::create(
     !defined(VIDEOREADER_WITH_GALAXY) && !defined(VIDEOREADER_WITH_IDATUM)
   throw std::runtime_error("build without any video backend");
 #else
-  throw std::runtime_error("unsupported uri");
+  throw std::runtime_error(("unsupported uri `" + url + "`").c_str());
 #endif
 #endif
 }
