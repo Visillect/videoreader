@@ -411,10 +411,6 @@ struct VideoReaderGalaxy::Impl {
     int64_t out{};
     GALAXY_CHECK(GXGetInt(handle, GX_INT_TIMESTAMP_TICK_FREQUENCY, &out));
     this->timestamp_tick_frequency = static_cast<double>(out);
-    GALAXY_CHECK(GXSetEnum(handle, GX_ENUM_EXPOSURE_AUTO, 1));
-    GALAXY_CHECK(GXSetEnum(handle, GX_ENUM_GAIN_AUTO, 1));
-    GALAXY_CHECK(GXSetInt(handle, GX_INT_BINNING_HORIZONTAL, 2));
-    GALAXY_CHECK(GXSetInt(handle, GX_INT_BINNING_VERTICAL, 2));
     this->set(parameter_pairs);
 
     this->thread = std::thread(&VideoReaderGalaxy::Impl::read, this);
