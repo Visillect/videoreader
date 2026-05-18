@@ -1,4 +1,3 @@
-#include <stdint.h>
 #include <videoreader/videoreader.hpp>
 #include <videoreader/videowriter.hpp>
 
