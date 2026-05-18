@@ -190,11 +190,13 @@ struct VideoWriter::Impl {
 };
 
 static int64_t pop_value_int64(
-    AVDictionary* dict, const char* key, int64_t const default_value) {
-  AVDictionaryEntry const* entry = av_dict_get(dict, key, NULL, 0);
-  if (entry) {
-    av_dict_set(&dict, key, NULL, 0);  // remove item
+    AVDictionaryUP& dict, char const* key, int64_t const default_value) {
+  AVDictionaryEntry const* entry = av_dict_get(dict.get(), key, NULL, 0);
+  if (entry != nullptr) {
     std::string const str{entry->value};
+    AVDictionary* raw_dict = dict.release();
+    av_dict_set(&raw_dict, key, NULL, 0);  // remove item
+    dict.reset(raw_dict);
     int64_t result{};
     auto [ptr, ec] =
         std::from_chars(str.data(), str.data() + str.size(), result);
@@ -202,6 +204,19 @@ static int64_t pop_value_int64(
       return result;
     }
     throw std::runtime_error("`" + str + "` is not a valid int64");
+  }
+  return default_value;
+}
+
+static std::string pop_value_string(
+    AVDictionaryUP& dict, char const* key, std::string&& default_value) {
+  AVDictionaryEntry const* entry = av_dict_get(dict.get(), key, NULL, 0);
+  if (entry != nullptr) {
+    std::string const str{entry->value};
+    AVDictionary* raw_dict = dict.release();
+    av_dict_set(&raw_dict, key, NULL, 0);  // remove item
+    dict.reset(raw_dict);
+    return str;
   }
   return default_value;
 }
@@ -232,8 +247,10 @@ VideoWriter::VideoWriter(
     throw std::runtime_error("sws_getContext() failed");
   }
 
+  auto options = _create_dict_from_params_vec(parameter_pairs);
   char format_name[] = "matroska";
-  char encoder_name[] = "libx264";  // libxvid
+  std::string const encoder_name =
+      pop_value_string(options, "encoder", std::string("libx264"));
   // find codec
   AVFormatContext* oc_ = nullptr;
   {
@@ -246,11 +263,14 @@ VideoWriter::VideoWriter(
     this->impl->oc.reset(oc_);
   }
 
-  const AVCodec* codec = avcodec_find_encoder_by_name(encoder_name);
+  const AVCodec* codec = avcodec_find_encoder_by_name(encoder_name.c_str());
   // oc_->oformat->video_codec = codec;
   // const AVCodec *codec = avcodec_find_encoder(oc_->oformat->video_codec);
   if (!codec) {
-    throw std::runtime_error("avcodec_find_encoder_by_name() failed");
+    throw std::runtime_error(
+        ("avcodec_find_encoder_by_name(`" + encoder_name +
+         "`) failed; run `ffmpeg -encoders` to see available encoders")
+            .c_str());
   }
   if (log_callback != nullptr) {
     char const* profile_name{};
@@ -278,12 +298,9 @@ VideoWriter::VideoWriter(
   c->opaque = &this->impl->log_info;
   this->impl->enc.reset(c);
 
-  auto options = _create_dict_from_params_vec(parameter_pairs);
-
   // c->codec_id = oc_->oformat->video_codec;
   c->codec_id = codec->id;
-  c->bit_rate =
-      pop_value_int64(options.get(), "br", 4000000);  // bits per second
+  c->bit_rate = pop_value_int64(options, "br", 4000000);  // bits per second
   c->width = format.width;
   c->height = format.height;
   this->impl->st->time_base =
