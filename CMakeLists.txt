@@ -5,6 +5,15 @@ add_library(videoreader
   src/videoreader.cpp
   include/videoreader/videoreader.hpp
 )
+
+if (WIN32)
+  # standard library is likely to be compiled with
+  # `_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR` - we match that.
+  # without it we will get nullptr exception
+  target_compile_definitions(
+    videoreader PRIVATE _DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR)
+endif()
+
 add_library(videowriter
   src/videowriter.cpp
   include/videoreader/videowriter.hpp
