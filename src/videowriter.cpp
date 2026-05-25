@@ -13,6 +13,7 @@ extern "C" {
 #include <optional>  // std::optional
 #include <thread>
 #endif
+#include <cmath>  // std::llround
 #include <stdexcept>  // std::runtime_error
 
 #ifdef VIDEOWRITER_WITH_FFMPEG
