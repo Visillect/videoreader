@@ -79,14 +79,14 @@ if (WIN32)
   endmacro()
   set(CMAKE_FIND_LIBRARY_SUFFIXES_ORIGINAL ${CMAKE_FIND_LIBRARY_SUFFIXES})
   set(CMAKE_FIND_LIBRARY_SUFFIXES ".dll")
-  ffmpeg_win_find_library(AVCODEC_SHARED_OBJECT avcodec-57 avcodec-58)
-  ffmpeg_win_find_library(AVDEVICE_SHARED_OBJECT avdevice-57 avdevice-58)
-  ffmpeg_win_find_library(AVFORMAT_SHARED_OBJECT avformat-57 avformat-58)
-  ffmpeg_win_find_library(AVUTIL_SHARED_OBJECT avutil-55 avutil-56)
-  ffmpeg_win_find_library(SWSCALE_SHARED_OBJECT swscale-4 swscale-5)
-  ffmpeg_win_find_library(SWRESAMPLE_SHARED_OBJECT swresample-2 swresample-3)
-  ffmpeg_win_find_library(AVFILTER_SHARED_OBJECT avfilter-6 avfilter-7)
-  ffmpeg_win_find_library(POSTPROC_SHARED_OBJECT postproc-54 postproc-55)
+  ffmpeg_win_find_library(AVCODEC_SHARED_OBJECT avcodec-57 avcodec-58 avcodec-59 avcodec-60 avcodec-61 avcodec-62)
+  ffmpeg_win_find_library(AVDEVICE_SHARED_OBJECT avdevice-57 avdevice-58 avdevice-59 avdevice-60 avdevice-61 avdevice-62)
+  ffmpeg_win_find_library(AVFORMAT_SHARED_OBJECT avformat-57 avformat-58 avformat-59 avformat-60 avformat-61 avformat-62)
+  ffmpeg_win_find_library(AVUTIL_SHARED_OBJECT avutil-55 avutil-56 avutil-57 avutil-58 avutil-59 avutil-60)
+  ffmpeg_win_find_library(SWSCALE_SHARED_OBJECT swscale-4 swscale-5 swscale-6 swscale-7 swscale-8 swscale-9)
+  ffmpeg_win_find_library(SWRESAMPLE_SHARED_OBJECT swresample-2 swresample-3 swresample-4 swresample-5 swresample-6)
+  ffmpeg_win_find_library(AVFILTER_SHARED_OBJECT avfilter-6 avfilter-7 avfilter-8 avfilter-9 avfilter-10 avfilter-11)
+  # ffmpeg_win_find_library(POSTPROC_SHARED_OBJECT postproc-54 postproc-55)
   SET(CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_FIND_LIBRARY_SUFFIXES_ORIGINAL})
 
   find_package_handle_standard_args(
@@ -105,7 +105,7 @@ if (WIN32)
       SWSCALE_SHARED_OBJECT
       SWRESAMPLE_SHARED_OBJECT
       AVFILTER_SHARED_OBJECT
-      POSTPROC_SHARED_OBJECT
+      # POSTPROC_SHARED_OBJECT
     VERSION_VAR LIBAVCODEC_VERSION_STRING
   )
 else()
