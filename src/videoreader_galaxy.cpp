@@ -502,24 +502,27 @@ struct VideoReaderGalaxy::Impl {
   void read() noexcept {
     // https://github.com/JerryAuas/RmEverTo2022/blob/6ca1c2f6d94934d8a1296f3ad45b9cc327b7fa9b/Sources/armordetect1.cpp#L205
     try {
-      uint32_t const TIMEOUT_MS = 250;
-      GXStreamOn(this->handle);
-      PGX_FRAME_BUFFER pFrameBuffer[5]{};
-      uint32_t nFrameCount{};
+      uint32_t const ACQUISITION_TIMEOUT_MS = 1250;
+#ifndef _WIN32
+      GX_STATUS const acquisition_start_status = GXStreamOn(this->handle);
+#else
+      GX_STATUS const acquisition_start_status =
+          GXSendCommand(this->handle, GX_COMMAND_ACQUISITION_START);
+#endif
+      if (acquisition_start_status != GX_STATUS_SUCCESS) {
+        throw std::runtime_error(get_error_string(acquisition_start_status));
+      }
+      PGX_FRAME_BUFFER pFrameBuffer{};
       uint32_t timeoutHit{};
       uint64_t addFrames{};  // trying to make nFrameID contigious
       uint64_t previousFrameID{};  // trying to make nFrameID contigious
       while (!this->stop_requested) {
-        auto const status = GXDQAllBufs(
-            this->handle,
-            pFrameBuffer,
-            sizeof(pFrameBuffer) / sizeof(*pFrameBuffer),
-            &nFrameCount,
-            TIMEOUT_MS);
+        const GX_STATUS status =
+            GXDQBuf(this->handle, &pFrameBuffer, ACQUISITION_TIMEOUT_MS);
         if (status != GX_STATUS_SUCCESS) {
           if (status == GX_STATUS_TIMEOUT) {
             ++timeoutHit;
-            if (timeoutHit > 3000 / TIMEOUT_MS) {
+            if (timeoutHit > 3000 / ACQUISITION_TIMEOUT_MS) {
               throw std::runtime_error("no galaxy data for 3 seconds");
             }
             continue;
@@ -528,90 +531,89 @@ struct VideoReaderGalaxy::Impl {
           }
         }
         timeoutHit = 0;
-        if (pFrameBuffer[nFrameCount - 1]->nStatus != GX_FRAME_STATUS_SUCCESS) {
-          GXQAllBufs(this->handle);
+        if (pFrameBuffer->nStatus != GX_FRAME_STATUS_SUCCESS) {
+          if (this->log_callback) {
+            std::string const last_error = get_error_string(GX_STATUS_SUCCESS);
+            this->log_callback(
+                ("buffer status is " + std::to_string(pFrameBuffer->nStatus) +
+                 ": " + last_error)
+                    .c_str(),
+                VideoReader::LogLevel::WARNING,
+                this->userdata);
+          }
           continue;
         }
-        for (uint32_t idx = 0; idx < nFrameCount; ++idx) {
-          PGX_FRAME_BUFFER buffer = pFrameBuffer[idx];
-          if (buffer->nStatus != GX_FRAME_STATUS_SUCCESS) {
-            if (this->log_callback) {
-              std::string const last_error =
-                  get_error_string(GX_STATUS_SUCCESS);
-              this->log_callback(
-                  ("buffer status is " + std::to_string(buffer->nStatus) +
-                   ": " + last_error)
-                      .c_str(),
-                  VideoReader::LogLevel::WARNING,
-                  this->userdata);
-            }
-            continue;
-          }
 
-          int32_t const alignment = 16;
-          int32_t const preferred_stride =
-              (buffer->nWidth * 1 + alignment - 1) & ~(alignment - 1);
+        int32_t const alignment = 16;
+        int32_t const preferred_stride =
+            (pFrameBuffer->nWidth * 1 + alignment - 1) & ~(alignment - 1);
 
-          Frame::timestamp_s_t const timestamp_s =
-              (static_cast<double>(buffer->nTimestamp) /
-               this->timestamp_tick_frequency);  // bad nTimestamp cast, sorry
+        Frame::timestamp_s_t const timestamp_s =
+            (static_cast<double>(pFrameBuffer->nTimestamp) /
+             this->timestamp_tick_frequency);  // bad nTimestamp cast, sorry
 
-          uint64_t const frame_id =
-              buffer->nFrameID - 1;  // -1 as Galaxy starts with 1
-          if (frame_id < previousFrameID) {
-            addFrames += (previousFrameID - frame_id) + 1;
-          }
-          Frame::number_t const number = frame_id + addFrames;
-          previousFrameID = frame_id;
-
-          FrameUP frame(new Frame(
-              this->deallocate_callback,
-              this->userdata,
-              {
-                  buffer->nHeight,  // height
-                  buffer->nWidth,  // width
-                  1,  // channels
-                  SCALAR_TYPE::U8,  // scalar_type
-                  preferred_stride,  // stride
-                  nullptr,  // data
-                  nullptr,  // user_data
-              },
-              number,
-              timestamp_s));
-
-          if (!this->pushers.empty()) {
-            MallocStream stream{32};
-            thismsgpack::pack_array_header(this->pushers.size(), stream);
-            for (auto& pusher : this->pushers) {
-              pusher(this->handle, stream);
-            }
-            frame->extras = stream.data();
-            frame->extras_size = stream.size();
-          }
-          VRImage* image = &frame->image;
-          (*this->allocate_callback)(image, this->userdata);
-          if (!image->data) {
-            throw std::runtime_error(
-                "allocation callback failed: data is nullptr");
-          }
-
-          std::memcpy(
-              image->data, buffer->pImgBuf, buffer->nWidth * buffer->nHeight);
-          {
-            std::lock_guard<SpinLock> guard(this->read_queue_lock);
-            if (this->read_queue.size() > 9) {
-              remove_every_second_item(this->read_queue);
-            }
-            this->read_queue.emplace_back(std::move(frame));
-          }
-          this->cv.notify_one();
+        uint64_t const frame_id =
+            pFrameBuffer->nFrameID - 1;  // -1 as Galaxy starts with 1
+        if (frame_id < previousFrameID) {
+          addFrames += (previousFrameID - frame_id) + 1;
         }
-        GXQAllBufs(this->handle);
+        Frame::number_t const number = frame_id + addFrames;
+        previousFrameID = frame_id;
+
+        FrameUP frame(new Frame(
+            this->deallocate_callback,
+            this->userdata,
+            {
+                pFrameBuffer->nHeight,  // height
+                pFrameBuffer->nWidth,  // width
+                1,  // channels
+                SCALAR_TYPE::U8,  // scalar_type
+                preferred_stride,  // stride
+                nullptr,  // data
+                nullptr,  // user_data
+            },
+            number,
+            timestamp_s));
+
+        if (!this->pushers.empty()) {
+          MallocStream stream{32};
+          thismsgpack::pack_array_header(this->pushers.size(), stream);
+          for (auto& pusher : this->pushers) {
+            pusher(this->handle, stream);
+          }
+          frame->extras = stream.data();
+          frame->extras_size = stream.size();
+        }
+        VRImage* image = &frame->image;
+        (*this->allocate_callback)(image, this->userdata);
+        if (!image->data) {
+          throw std::runtime_error(
+              "allocation callback failed: data is nullptr");
+        }
+
+        std::memcpy(
+            image->data,
+            (uint8_t*)(pFrameBuffer->pImgBuf),
+            pFrameBuffer->nWidth * pFrameBuffer->nHeight);
+        GX_STATUS const gxqbuf_status = GXQBuf(this->handle, pFrameBuffer);
+        {
+          std::lock_guard<SpinLock> guard(this->read_queue_lock);
+          if (this->read_queue.size() > 9) {
+            remove_every_second_item(this->read_queue);
+          }
+          this->read_queue.emplace_back(std::move(frame));
+        }
+        this->cv.notify_one();
       }
     } catch (...) {
       this->stop_requested = true;
       this->exception = std::current_exception();
     }
+#ifndef _WIN32
+    GXStreamOff(this->handle);
+#else
+    GXSendCommand(this->handle, GX_COMMAND_ACQUISITION_STOP);
+#endif
   }
   FrameUP pop_grab_result() {
     this->cv.wait(this->read_queue_lock, [&] {
@@ -648,7 +650,7 @@ VideoReaderGalaxy::VideoReaderGalaxy(
     LogCallback log_callback,
     void* userdata) {
 
-  auto const res = GXInitLib();
+  GX_STATUS const res = GXInitLib();
   if (res != GX_STATUS_SUCCESS) {
     throw std::runtime_error("GXInitLib was't successful");
   }
