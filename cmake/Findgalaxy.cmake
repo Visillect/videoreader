@@ -18,6 +18,7 @@ find_path(GALAXY_INCLUDE_DIR GxIAPI.h
   /opt/local/include
   /opt/include
   /mingw/include
+  "C:/Program Files/Daheng Imaging/GalaxySDK/Development/VC SDK"
 )
 
 if (GALAXY_INCLUDE_DIR)
@@ -28,7 +29,7 @@ endif()
 include(FindPackageHandleStandardArgs)
 
 find_library(GALAXY_GXI_LIBRARY
-NAMES libgxiapi.so
+NAMES libgxiapi.so GxIAPI.lib
 HINTS
 ${GALAXY_DIR}
 $ENV{GALAXY_DIR}
@@ -42,6 +43,7 @@ PATHS
 /opt
 /mingw
 "${GALAXY_INCLUDE_DIR}/../lib/x86_64"
+"${GALAXY_INCLUDE_DIR}/../lib/x64"
 )
 
 find_package_handle_standard_args(
